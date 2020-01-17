@@ -87,6 +87,13 @@
  * a better scalability.
  */
 
+// zhou: used by EPOLLONESHOT:
+//       Sets the one-shot behavior for the associated file descriptor. This means that
+//       after an event is pulled out with epoll_wait(2) the associated file descriptor
+//       is internally disabled and no other events will be reported by the epoll interface.
+//       The user must call epoll_ctl() with EPOLL_CTL_MOD to rearm the file descriptor
+//       with a new event mask.
+
 /* Epoll private bits inside the event mask */
 #define EP_PRIVATE_BITS (EPOLLWAKEUP | EPOLLONESHOT | EPOLLET | EPOLLEXCLUSIVE)
 
@@ -100,6 +107,7 @@
 
 #define EP_MAX_EVENTS (INT_MAX / sizeof(struct epoll_event))
 
+// zhou: it indicate a invalid pointer, unlike "NULL" which indicate you can assign proper value for it.
 #define EP_UNACTIVE_PTR ((void *) -1L)
 
 #define EP_ITEM_COST (sizeof(struct epitem) + sizeof(struct eppoll_entry))
@@ -128,6 +136,9 @@ struct nested_calls {
 	spinlock_t lock;
 };
 
+// zhou: each fd (include nested epoll fd) represented by a "struct epitem"
+// which managed by RB tree.
+
 /*
  * Each file descriptor added to the eventpoll interface will
  * have an entry of this type linked to the "rbr" RB tree.
@@ -145,24 +156,29 @@ struct epitem {
 	/* List header used to link this structure to the eventpoll ready list */
 	struct list_head rdllink;
 
+    // zhou: node of eventpoll.ovflist
 	/*
 	 * Works together "struct eventpoll"->ovflist in keeping the
 	 * single linked chain of items.
 	 */
 	struct epitem *next;
 
+    // zhou: targe file info.
 	/* The file descriptor information this item refers to */
 	struct epoll_filefd ffd;
 
+    // zhou: length of "pwqlist"
 	/* Number of active wait queue attached to poll operations */
 	int nwait;
 
+    // zhou: due to nested epoll fd, this list contains total file under this item
 	/* List containing poll wait queues */
 	struct list_head pwqlist;
 
 	/* The "container" of this item */
 	struct eventpoll *ep;
 
+    // zhou: node of target file's f_ep_links
 	/* List header used to link this item to the "struct file" items list */
 	struct list_head fllink;
 
@@ -173,6 +189,7 @@ struct epitem {
 	struct epoll_event event;
 };
 
+// zhou: main data structure of epoll().
 /*
  * This structure is stored inside the "private_data" member of the file
  * structure and represents the main data structure for the eventpoll
@@ -187,11 +204,17 @@ struct eventpoll {
 	 */
 	struct mutex mtx;
 
+    // zhou: becase there are may be more than one thread wait on this epoll instance.
 	/* Wait queue used by sys_epoll_wait() */
 	wait_queue_head_t wq;
 
+    // zhou: This will enable to have a hierarchy of epoll file descriptor of no more than EP_MAX_NESTS deep.???
 	/* Wait queue used by file->poll() */
 	wait_queue_head_t poll_wait;
+
+    // zhou: when we EPOLL_CTRL_ADD, there is already event ready, we have to
+    //       put the "struct epitem" to this list, otherwise, we will loss it,
+    //       because until epoll_wait(), no body will handle it.
 
 	/* List of ready file descriptors */
 	struct list_head rdllist;
@@ -202,6 +225,7 @@ struct eventpoll {
 	/* RB tree root used to store monitored fd structs */
 	struct rb_root_cached rbr;
 
+    // zhou: OVer Fly list, not use generic list
 	/*
 	 * This is a single linked list that chains all the "struct epitem" that
 	 * happened while transferring ready events to userspace w/out
@@ -229,21 +253,30 @@ struct eventpoll {
 
 /* Wait structure used by the poll hooks */
 struct eppoll_entry {
+    // zhou: node of epitem.pwqlist
 	/* List header used to link this structure to the "struct epitem" */
 	struct list_head llink;
 
 	/* The "base" pointer is set to the container "struct epitem" */
 	struct epitem *base;
 
+    // zhou: node of file wait queue
 	/*
 	 * Wait queue item that will be linked to the target file wait
 	 * queue head.
 	 */
 	wait_queue_entry_t wait;
 
+    // zhou: local copy of file wait queue pointer
 	/* The wait queue head that linked the "wait" wait queue item */
 	wait_queue_head_t *whead;
 };
+
+// zhou: the reason why we need the wrapper is, the standard callback function
+//       void ep_ptable_queue_proc(struct file *, wait_queue_head_t *, poll_table *).
+//       It has parameter "poll_table *", but we need to get "struct epitem", with
+//       the help of ep_item_from_epqueue(). ep_pqueue only exist in temp variable.
+//       In fact, the fucntion "ep_ptable_queue_proc()" is the value of "poll_table._proc"
 
 /* Wrapper struct used by poll queueing */
 struct ep_pqueue {
@@ -251,6 +284,7 @@ struct ep_pqueue {
 	struct epitem *epi;
 };
 
+// zhou: used by epoll_wait() which the space and length specified by App.
 /* Used by the ep_send_events() function as callback private data */
 struct ep_send_events_data {
 	int maxevents;
@@ -310,6 +344,7 @@ struct ctl_table epoll_table[] = {
 
 static const struct file_operations eventpoll_fops;
 
+// zhou: judge whether epoll instance fd by its ".f_op" is epoll specific
 static inline int is_file_epoll(struct file *f)
 {
 	return f->f_op == &eventpoll_fops;
@@ -647,6 +682,7 @@ static inline void ep_pm_stay_awake_rcu(struct epitem *epi)
 	rcu_read_unlock();
 }
 
+// zhou: move rdllist to temp txlist, since cb function may operate "rdllist".
 /**
  * ep_scan_ready_list - Scans the ready list in a way that makes possible for
  *                      the scan code, to call f_op->poll(). Also allows for
@@ -688,6 +724,8 @@ static __poll_t ep_scan_ready_list(struct eventpoll *ep,
 	 * in a lockless way.
 	 */
 	write_lock_irq(&ep->lock);
+
+    // zhou: similar to replace list head from rdllist to txlist.
 	list_splice_init(&ep->rdllist, &txlist);
 	WRITE_ONCE(ep->ovflist, NULL);
 	write_unlock_irq(&ep->lock);
@@ -906,6 +944,9 @@ static __poll_t ep_read_events_proc(struct eventpoll *ep, struct list_head *head
 	return 0;
 }
 
+// zhou: this function is the epoll inode file .poll callback function.
+//       only be invoked in nested epoll
+
 static __poll_t ep_eventpoll_poll(struct file *file, poll_table *wait)
 {
 	struct eventpoll *ep = file->private_data;
@@ -952,6 +993,7 @@ static const struct file_operations eventpoll_fops = {
 	.show_fdinfo	= ep_show_fdinfo,
 #endif
 	.release	= ep_eventpoll_release,
+    // zhou: supporting poll operation will make it possible that nested into other epoll instance.
 	.poll		= ep_eventpoll_poll,
 	.llseek		= noop_llseek,
 };
@@ -1165,6 +1207,10 @@ static inline bool chain_epi_lockless(struct epitem *epi)
 	return true;
 }
 
+// zhou: unlike __pollwake() for select(), which almost do nothing.
+//       Here we do a lot of things to avoid process check all fd again
+//       after wake up like what select() do.
+
 /*
  * This is the callback that is passed to the wait queue wakeup
  * mechanism. It is called by the stored file descriptors when they
@@ -1233,6 +1279,8 @@ static int ep_poll_callback(wait_queue_entry_t *wait, unsigned mode, int sync, v
 		ep_pm_stay_awake_rcu(epi);
 	}
 
+
+    // zhou: wake_up_locked() -> __wake_up_locked() -> __wake_up_common() -> default_wake_function()
 	/*
 	 * Wake up ( if active ) both the eventpoll wait list and the ->poll()
 	 * wait list.
@@ -1287,6 +1335,9 @@ out_unlock:
 
 	return ewake;
 }
+
+// zhou: callback function invoked by ".poll" of file operation
+// "wait_queue_headt_t *whead", wait queue of each file
 
 /*
  * This is the callback that is used to add our wait queue to the
@@ -1506,9 +1557,12 @@ static int ep_insert(struct eventpoll *ep, const struct epoll_event *event,
 		RCU_INIT_POINTER(epi->ws, NULL);
 	}
 
+    // zhou: "struct ep_pqueue" just a wrapper of "struct epitem", + make "sleep" cb function.
 	/* Initialize the poll table using the queue callback */
 	epq.epi = epi;
 	init_poll_funcptr(&epq.pt, ep_ptable_queue_proc);
+
+    // zhou: check the current event state for the newly added fd.
 
 	/*
 	 * Attach the item to the poll hooks and get current event bits.
@@ -1601,6 +1655,9 @@ error_create_wakeup_source:
 	return error;
 }
 
+// zhou: side effect is, we move fd to rllist incase current state of interested events is active.
+// Then get them in epoll_wait(). By this way, we avoid missing events if APP lost trace them in ET.
+
 /*
  * Modify the interest event mask by dropping an event if the new mask
  * has a match in the current file status. Must be called with "mtx" held.
@@ -1661,6 +1718,7 @@ static int ep_modify(struct eventpoll *ep, struct epitem *epi,
 			list_add_tail(&epi->rdllink, &ep->rdllist);
 			ep_pm_stay_awake(epi);
 
+            // zhou: wake_up_locked() -> __wake_up_locked() -> __wake_up_common() -> default_wake_function()
 			/* Notify waiting tasks that events are available */
 			if (waitqueue_active(&ep->wq))
 				wake_up(&ep->wq);
@@ -1761,6 +1819,7 @@ static __poll_t ep_send_events_proc(struct eventpoll *ep, struct list_head *head
 	return 0;
 }
 
+// zhou: according to "rdllist", .poll each fd to fetch latest events state.
 static int ep_send_events(struct eventpoll *ep,
 			  struct epoll_event __user *events, int maxevents)
 {
@@ -1783,6 +1842,8 @@ static inline struct timespec64 ep_set_mstimeout(long ms)
 	ktime_get_ts64(&now);
 	return timespec64_add_safe(now, ts);
 }
+
+// zhou: core procedure, epoll_wait().
 
 /**
  * ep_poll - Retrieves ready events, and delivers them to the caller supplied
@@ -1840,6 +1901,7 @@ fetch_events:
 	if (!ep_events_available(ep))
 		ep_busy_loop(ep, timed_out);
 
+    // zhou: no active events in "rdllist" or "ovflist"
 	eavail = ep_events_available(ep);
 	if (eavail)
 		goto send_events;
@@ -1858,9 +1920,17 @@ fetch_events:
 	 */
 	if (!waiter) {
 		waiter = true;
+
+        // zhou: prepare a wait queue node, the cb fucntion default_wake_function() defined here,
+        //       wake_up_locked() -> __wake_up_locked() -> __wake_up_common() -> default_wake_function()
+
 		init_waitqueue_entry(&wait, current);
 
 		spin_lock_irq(&ep->wq.lock);
+        // zhou: append new entry to this epoll's "wq" list.
+        //       "xxx_exclusive" is important, it indicates that just wake up ONE thread when event active.
+        //       refer to "wake_up_locked()".
+
 		__add_wait_queue_exclusive(&ep->wq, &wait);
 		spin_unlock_irq(&ep->wq.lock);
 	}

@@ -2265,7 +2265,7 @@ SYSCALL_DEFINE3(semop, int, semid, struct sembuf __user *, tsops,
 /* If CLONE_SYSVSEM is set, establish sharing of SEM_UNDO state between
  * parent and child tasks.
  */
-
+// zhou: which means fork(), the child process will not occupy the semaphore by +1
 int copy_semundo(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct sem_undo_list *undo_list;

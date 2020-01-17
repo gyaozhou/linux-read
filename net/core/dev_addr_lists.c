@@ -234,6 +234,7 @@ EXPORT_SYMBOL(__hw_addr_unsync);
  *  the addresses requiring removal will simply be removed without
  *  any notification to the device.
  **/
+// zhou: README,
 int __hw_addr_sync_dev(struct netdev_hw_addr_list *list,
 		       struct net_device *dev,
 		       int (*sync)(struct net_device *, const unsigned char *),
@@ -778,6 +779,7 @@ static int __dev_mc_add(struct net_device *dev, const unsigned char *addr,
  *	Add a multicast address to the device or increase
  *	the reference count if it already exists.
  */
+// zhou:
 int dev_mc_add(struct net_device *dev, const unsigned char *addr)
 {
 	return __dev_mc_add(dev, addr, false);

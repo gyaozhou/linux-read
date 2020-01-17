@@ -1262,6 +1262,7 @@ restart:
 		goto do_error;
 
 	while (msg_data_left(msg)) {
+
 		int copy = 0;
 
 		skb = tcp_write_queue_tail(sk);
@@ -1311,7 +1312,9 @@ new_segment:
 			err = skb_add_data_nocache(sk, skb, &msg->msg_iter, copy);
 			if (err)
 				goto do_fault;
+
 		} else if (!zc) {
+
 			bool merge = true;
 			int i = skb_shinfo(skb)->nr_frags;
 			struct page_frag *pfrag = sk_page_frag(sk);

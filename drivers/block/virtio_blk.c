@@ -403,6 +403,7 @@ static int virtblk_getgeo(struct block_device *bd, struct hd_geometry *geo)
 	return 0;
 }
 
+// zhou: where are other operations defined, such as open/release/
 static const struct block_device_operations virtblk_fops = {
 	.ioctl  = virtblk_ioctl,
 	.owner  = THIS_MODULE,

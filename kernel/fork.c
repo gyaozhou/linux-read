@@ -162,6 +162,7 @@ void __weak arch_release_task_struct(struct task_struct *tsk)
 }
 
 #ifndef CONFIG_ARCH_TASK_STRUCT_ALLOCATOR
+// zhou: pre-alloc slab "task_struct" for the memeory comes from
 static struct kmem_cache *task_struct_cachep;
 
 static inline struct task_struct *alloc_task_struct_node(int node)
@@ -841,6 +842,9 @@ void __init fork_init(void)
 	uprobes_init();
 }
 
+// zhou: if there is another definition with same func name and no "weak" before it,
+//       then this function will be suppressed. For x86, we have.
+
 int __weak arch_dup_task_struct(struct task_struct *dst,
 					       struct task_struct *src)
 {
@@ -856,6 +860,7 @@ void set_task_stack_end_magic(struct task_struct *tsk)
 	*stackend = STACK_END_MAGIC;	/* for overflow detection */
 }
 
+// zhou: duplicate task struct
 static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 {
 	struct task_struct *tsk;
@@ -869,6 +874,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	if (!tsk)
 		return NULL;
 
+    // zhou: copy value for all elements
 	stack = alloc_thread_stack_node(tsk, node);
 	if (!stack)
 		goto free_tsk;
@@ -906,6 +912,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	tsk->seccomp.filter = NULL;
 #endif
 
+    // zhou: copy whole stack
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
 	clear_tsk_need_resched(tsk);
@@ -1407,6 +1414,9 @@ static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
 	vmacache_flush(tsk);
 
 	if (clone_flags & CLONE_VM) {
+        // zhou: when creating thread, we just increase the reference number.
+        //       And the new "task_struct" will refer to it.
+
 		mmget(oldmm);
 		mm = oldmm;
 		goto good_mm;
@@ -1458,11 +1468,13 @@ static int copy_files(unsigned long clone_flags, struct task_struct *tsk)
 	if (!oldf)
 		goto out;
 
+    // zhou: e.g. pthread_create, they share the same "struct task_struct.files"
 	if (clone_flags & CLONE_FILES) {
 		atomic_inc(&oldf->count);
 		goto out;
 	}
 
+    // zhou: duplicate "struct task_struct.files" only, file object will not be copied.
 	newf = dup_fd(oldf, &error);
 	if (!newf)
 		goto out;
@@ -1499,6 +1511,7 @@ static int copy_io(unsigned long clone_flags, struct task_struct *tsk)
 	return 0;
 }
 
+// zhou: inherit the signal handler
 static int copy_sighand(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct sighand_struct *sig;
@@ -1833,6 +1846,7 @@ static __latent_entropy struct task_struct *copy_process(
 	struct file *pidfile = NULL;
 	u64 clone_flags = args->flags;
 
+    // zhou: "namespace" LXC will conflict with filesystem sharing
 	/*
 	 * Don't allow sharing the root directory with processes in a different
 	 * namespace
@@ -1941,6 +1955,7 @@ static __latent_entropy struct task_struct *copy_process(
 	}
 	current->flags &= ~PF_NPROC_EXCEEDED;
 
+    // zhou: refer to "security/credentials.txt"
 	retval = copy_creds(p, clone_flags);
 	if (retval < 0)
 		goto bad_fork_free;
@@ -1963,8 +1978,10 @@ static __latent_entropy struct task_struct *copy_process(
 	p->vfork_done = NULL;
 	spin_lock_init(&p->alloc_lock);
 
+    // zhou: all the pending signals are cleared
 	init_sigpending(&p->pending);
 
+    // zhou: accounting were cleared
 	p->utime = p->stime = p->gtime = 0;
 #ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
 	p->utimescaled = p->stimescaled = 0;
@@ -2038,11 +2055,13 @@ static __latent_entropy struct task_struct *copy_process(
 	p->sequential_io_avg	= 0;
 #endif
 
+    // zhou: attach this new task to a CPU, "struct thread_info.cpu"
 	/* Perform scheduler related setup. Assign this task to a CPU. */
 	retval = sched_fork(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_policy;
 
+    // zhou: performance related setup
 	retval = perf_event_init_task(p);
 	if (retval)
 		goto bad_fork_cleanup_policy;
@@ -2278,6 +2297,7 @@ static __latent_entropy struct task_struct *copy_process(
 	syscall_tracepoint_update(p);
 	write_unlock_irq(&tasklist_lock);
 
+    // zhou: report "PROC_EVENT_FORK" to netlink, and application can heard it.
 	proc_fork_connector(p);
 	cgroup_post_fork(p);
 	cgroup_threadgroup_change_end(current);
@@ -2383,6 +2403,8 @@ struct mm_struct *copy_init_mm(void)
 	return dup_mm(NULL, &init_mm);
 }
 
+
+// zhou: fork/vfork/clone converge here with different parameters.
 /*
  *  Ok, this is the main fork-routine.
  *

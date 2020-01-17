@@ -277,6 +277,7 @@ static inline bool neigh_key_eq128(const struct neighbour *n, const void *pkey)
 		(n32[2] ^ p32[2]) | (n32[3] ^ p32[3])) == 0;
 }
 
+// zhou: common function for neigh system, e.g. ARP in IPv4
 static inline struct neighbour *___neigh_lookup_noref(
 	struct neigh_table *tbl,
 	bool (*key_eq)(const struct neighbour *n, const void *pkey),
@@ -437,7 +438,7 @@ static inline struct neighbour * neigh_clone(struct neighbour *neigh)
 static inline int neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 {
 	unsigned long now = jiffies;
-	
+
 	if (READ_ONCE(neigh->used) != now)
 		WRITE_ONCE(neigh->used, now);
 	if (!(neigh->nud_state&(NUD_CONNECTED|NUD_DELAY|NUD_PROBE)))

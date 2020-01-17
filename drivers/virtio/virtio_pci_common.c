@@ -489,7 +489,7 @@ static const struct dev_pm_ops virtio_pci_pm_ops = {
 };
 #endif
 
-
+// zhou: virtio as device on PCI bus.
 /* Qumranet donated their vendor ID for devices 0x1000 thru 0x10FF. */
 static const struct pci_device_id virtio_pci_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_REDHAT_QUMRANET, PCI_ANY_ID) },
@@ -509,6 +509,7 @@ static void virtio_pci_release_dev(struct device *_d)
 	kfree(vp_dev);
 }
 
+// zhou:
 static int virtio_pci_probe(struct pci_dev *pci_dev,
 			    const struct pci_device_id *id)
 {
@@ -540,6 +541,7 @@ static int virtio_pci_probe(struct pci_dev *pci_dev,
 		if (rc)
 			goto err_probe;
 	} else {
+        // zhou: looks mapping PCI config space.
 		rc = virtio_pci_modern_probe(vp_dev);
 		if (rc == -ENODEV)
 			rc = virtio_pci_legacy_probe(vp_dev);
@@ -549,6 +551,7 @@ static int virtio_pci_probe(struct pci_dev *pci_dev,
 
 	pci_set_master(pci_dev);
 
+    // zhou:
 	rc = register_virtio_device(&vp_dev->vdev);
 	reg_dev = vp_dev;
 	if (rc)

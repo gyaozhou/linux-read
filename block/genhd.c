@@ -351,6 +351,7 @@ void blkdev_show(struct seq_file *seqf, off_t offset)
  * See Documentation/admin-guide/devices.txt for the list of allocated
  * major numbers.
  */
+// zhou: README,
 int register_blkdev(unsigned int major, const char *name)
 {
 	struct blk_major_name **n, *p;
@@ -592,7 +593,7 @@ static int exact_lock(dev_t devt, void *data)
 		return -1;
 	return 0;
 }
-
+// zhou: README,
 static void register_disk(struct device *parent, struct gendisk *disk,
 			  const struct attribute_group **groups)
 {
@@ -688,6 +689,7 @@ exit:
  *
  * FIXME: error handling
  */
+// zhou: README,
 static void __device_add_disk(struct device *parent, struct gendisk *disk,
 			      const struct attribute_group **groups,
 			      bool register_queue)
@@ -1465,6 +1467,7 @@ dev_t blk_lookup_devt(const char *name, int partno)
 }
 EXPORT_SYMBOL(blk_lookup_devt);
 
+// zhou: invoked when detected new disk, by alloc_disk().
 struct gendisk *__alloc_disk_node(int minors, int node_id)
 {
 	struct gendisk *disk;

@@ -5051,6 +5051,7 @@ unsigned long nr_free_buffer_pages(void)
 {
 	return nr_free_zone_pages(gfp_zone(GFP_USER));
 }
+
 EXPORT_SYMBOL_GPL(nr_free_buffer_pages);
 
 /**
@@ -5118,6 +5119,7 @@ long si_mem_available(void)
 }
 EXPORT_SYMBOL_GPL(si_mem_available);
 
+// zhou:
 void si_meminfo(struct sysinfo *val)
 {
 	val->totalram = totalram_pages();

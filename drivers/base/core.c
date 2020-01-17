@@ -2355,6 +2355,7 @@ static int device_private_init(struct device *dev)
  * *not* succeeded, use *only* put_device() to drop the reference
  * count.
  */
+// zhou: README,
 int device_add(struct device *dev)
 {
 	struct device *parent;
@@ -2535,6 +2536,10 @@ name_error:
 	goto done;
 }
 EXPORT_SYMBOL_GPL(device_add);
+
+// zhou: device core. Driver Core initializes a number of the device's fields,
+//       registers the device's device's kobject with the kobject core and then
+//       adds the device to the list of devices that are held by the device's parent.
 
 /**
  * device_register - register a device with the system.

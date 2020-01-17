@@ -170,6 +170,7 @@ static void veth_get_ethtool_stats(struct net_device *dev,
 	}
 }
 
+// zhou: as ethernet device, need to handle ethtool operations.
 static const struct ethtool_ops veth_ethtool_ops = {
 	.get_drvinfo		= veth_get_drvinfo,
 	.get_link		= ethtool_op_get_link,
@@ -1165,6 +1166,7 @@ static const struct net_device_ops veth_netdev_ops = {
 
 static void veth_setup(struct net_device *dev)
 {
+    // zhou: setup Ethernet network device
 	ether_setup(dev);
 
 	dev->priv_flags &= ~IFF_TX_SKB_SHARING;
@@ -1368,6 +1370,8 @@ static struct net *veth_get_link_net(const struct net_device *dev)
 	return peer ? dev_net(peer) : dev_net(dev);
 }
 
+// zhou: RouTer NetLink callbacks fns, used to handle "veth" related requests
+//       from userspace.
 static struct rtnl_link_ops veth_link_ops = {
 	.kind		= DRV_NAME,
 	.priv_size	= sizeof(struct veth_priv),

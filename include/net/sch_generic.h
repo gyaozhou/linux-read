@@ -33,6 +33,7 @@ struct qdisc_rate_table {
 	int		refcnt;
 };
 
+// zhou: "qdisc" stands for "Queue Discipline"
 enum qdisc_state_t {
 	__QDISC_STATE_SCHED,
 	__QDISC_STATE_DEACTIVATED,

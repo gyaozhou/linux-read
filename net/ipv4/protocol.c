@@ -24,6 +24,8 @@
 #include <linux/spinlock.h>
 #include <net/protocol.h>
 
+// zhou: protocols (not type) supported by PF_INET, 0~255,
+//       and read/write protected by "inet_proto_lock"
 struct net_protocol __rcu *inet_protos[MAX_INET_PROTOS] __read_mostly;
 EXPORT_SYMBOL(inet_protos);
 const struct net_offload __rcu *inet_offloads[MAX_INET_PROTOS] __read_mostly;
@@ -56,6 +58,8 @@ int inet_del_protocol(const struct net_protocol *prot, unsigned char protocol)
 	ret = (cmpxchg((const struct net_protocol **)&inet_protos[protocol],
 		       prot, NULL) == prot) ? 0 : -1;
 
+    // zhou: since "inet_protos" will be read by rcu_read_lock,
+    //       so this function used to block here.
 	synchronize_net();
 
 	return ret;

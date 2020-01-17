@@ -626,6 +626,7 @@ struct wake_q_node {
 	struct wake_q_node *next;
 };
 
+// zhou: PCB, core for process and schedule.
 struct task_struct {
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 	/*
@@ -643,6 +644,7 @@ struct task_struct {
 	 */
 	randomized_struct_fields_start
 
+    // zhou: pointer to "struct thread_info" which locate in "union thread_union"
 	void				*stack;
 	refcount_t			usage;
 	/* Per task flags (PF_*), defined further below: */
@@ -906,9 +908,11 @@ struct task_struct {
 	unsigned long			last_switch_count;
 	unsigned long			last_switch_time;
 #endif
+    // zhou: filesystem structure from process' view
 	/* Filesystem information: */
 	struct fs_struct		*fs;
 
+    // zhou: files used by this process
 	/* Open file information: */
 	struct files_struct		*files;
 
@@ -1287,6 +1291,7 @@ struct task_struct {
 	 */
 	randomized_struct_fields_end
 
+    // zhou: includes some registers, should be used for task switch. But no stack.
 	/* CPU-specific state of this task: */
 	struct thread_struct		thread;
 
@@ -1639,6 +1644,10 @@ extern struct task_struct *curr_task(int cpu);
 extern void ia64_set_curr_task(int cpu, struct task_struct *p);
 
 void yield(void);
+
+// zhou: it's the tricky that make "struct thread_info" colocated with "stack".
+//       Because stack will grow from higher address to lower address, the real length of
+//       stack is "THREAD_SIZE" - sizeof "struct thread_info"
 
 union thread_union {
 #ifndef CONFIG_ARCH_TASK_STRUCT_ON_STACK

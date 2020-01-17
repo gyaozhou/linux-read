@@ -272,6 +272,7 @@ vfta_update:
 	return 0;
 }
 
+// zhou: support user defined MAC address.
 /**
  *  igb_check_alt_mac_addr - Check for alternate MAC addr
  *  @hw: pointer to the HW structure

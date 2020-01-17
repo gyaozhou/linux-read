@@ -178,6 +178,7 @@ out:
  *	Buffers may only be allocated from interrupts using a @gfp_mask of
  *	%GFP_ATOMIC.
  */
+// zhou: README,
 struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 			    int flags, int node)
 {
@@ -3983,6 +3984,7 @@ err:
 }
 EXPORT_SYMBOL_GPL(skb_segment);
 
+// zhou: Scatter-Gather I/O
 int skb_gro_receive(struct sk_buff *p, struct sk_buff *skb)
 {
 	struct skb_shared_info *pinfo, *skbinfo = skb_shinfo(skb);

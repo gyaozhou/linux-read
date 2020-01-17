@@ -177,6 +177,7 @@ static const struct kset_uevent_ops bus_uevent_ops = {
 
 static struct kset *bus_kset;
 
+// zhou: unbind ...
 /* Manually detach a device from its associated driver. */
 static ssize_t unbind_store(struct device_driver *drv, const char *buf,
 			    size_t count)
@@ -196,6 +197,7 @@ static ssize_t unbind_store(struct device_driver *drv, const char *buf,
 }
 static DRIVER_ATTR_IGNORE_LOCKDEP(unbind, S_IWUSR, NULL, unbind_store);
 
+// zhou: bind ...
 /*
  * Manually attach a device to a driver.
  * Note: the driver must want to bind to the device,
@@ -533,6 +535,7 @@ void bus_remove_device(struct device *dev)
 	bus_put(dev->bus);
 }
 
+// zhou: create driver's bind/unbind /sys files.
 static int __must_check add_bind_files(struct device_driver *drv)
 {
 	int ret;
@@ -586,6 +589,7 @@ static ssize_t uevent_store(struct device_driver *drv, const char *buf,
 }
 static DRIVER_ATTR_WO(uevent);
 
+// zhou: for example, put the driver "igb" under "/sys/bus/pci/drivers/"
 /**
  * bus_add_driver - Add a driver to the bus.
  * @drv: driver.
@@ -596,6 +600,8 @@ int bus_add_driver(struct device_driver *drv)
 	struct driver_private *priv;
 	int error = 0;
 
+    // zhou: look up the bus that the driver is to be associated with. If this bus is not found,
+    //       the function instantly return.
 	bus = bus_get(drv->bus);
 	if (!bus)
 		return -EINVAL;
@@ -624,6 +630,7 @@ int bus_add_driver(struct device_driver *drv)
 	}
 	module_add_driver(drv->owner, drv);
 
+o    // zhou: create "/sys/bus/pci/drivers/igb/uevent"
 	error = driver_create_file(drv, &driver_attr_uevent);
 	if (error) {
 		printk(KERN_ERR "%s: uevent attr (%s) failed\n",
@@ -636,6 +643,7 @@ int bus_add_driver(struct device_driver *drv)
 			__func__, drv->name);
 	}
 
+    // zhou: create "/sys/bus/pci/drivers/igb/bind", "/sys/bus/pci/drivers/igb/unbind"
 	if (!drv->suppress_bind_attrs) {
 		error = add_bind_files(drv);
 		if (error) {
@@ -645,7 +653,7 @@ int bus_add_driver(struct device_driver *drv)
 		}
 	}
 
-	return 0;
+	Return 0;
 
 out_unregister:
 	kobject_put(&priv->kobj);
@@ -829,13 +837,14 @@ int bus_register(struct bus_type *bus)
 	if (retval)
 		goto bus_uevent_fail;
 
+        // zhou: add"/sys/bus/pci/devices"
 	priv->devices_kset = kset_create_and_add("devices", NULL,
 						 &priv->subsys.kobj);
 	if (!priv->devices_kset) {
 		retval = -ENOMEM;
 		goto bus_devices_fail;
 	}
-
+    // zhou: add"/sys/bus/pci/drivers"
 	priv->drivers_kset = kset_create_and_add("drivers", NULL,
 						 &priv->subsys.kobj);
 	if (!priv->drivers_kset) {

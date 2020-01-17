@@ -23,10 +23,13 @@
  */
 #define NR_OPEN_DEFAULT BITS_PER_LONG
 
+// zhou: this struct used maintenance a bitmap of current opened fd,
+//       will be realloc with bigger "max_fds" if it can not hold more.
 struct fdtable {
 	unsigned int max_fds;
 	struct file __rcu **fd;      /* current fd array */
 	unsigned long *close_on_exec;
+    // zhou: bitmap of fd.
 	unsigned long *open_fds;
 	unsigned long *full_fds_bits;
 	struct rcu_head rcu;
@@ -42,6 +45,7 @@ static inline bool fd_is_open(unsigned int fd, const struct fdtable *fdt)
 	return test_bit(fd, fdt->open_fds);
 }
 
+// zhou: opened files in current process.
 /*
  * Open file table structure
  */
@@ -54,12 +58,19 @@ struct files_struct {
 	wait_queue_head_t resize_wait;
 
 	struct fdtable __rcu *fdt;
+
+    // zhou: pre-alloc space as blow.
 	struct fdtable fdtab;
   /*
    * written part on a separate cache line in SMP
    */
 	spinlock_t file_lock ____cacheline_aligned_in_smp;
 	unsigned int next_fd;
+
+    // zhou: these three elements are the pre-alloc space allocated for "fdt"'s each pointer.
+    //       In most of cases, it's enough to hold fd in a single process.
+    //       If NOT enough, fdt will reallocate memory to hold growing fd.
+    //       NR_OPEN_DEFAULT==32 or 64.
 	unsigned long close_on_exec_init[1];
 	unsigned long open_fds_init[1];
 	unsigned long full_fds_bits_init[1];

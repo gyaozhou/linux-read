@@ -1738,6 +1738,7 @@ static const struct file_operations vhost_scsi_fops = {
 
 static struct miscdevice vhost_scsi_misc = {
 	MISC_DYNAMIC_MINOR,
+    // zhou: /dev/vhost-scsi
 	"vhost-scsi",
 	&vhost_scsi_fops,
 };
@@ -2314,6 +2315,7 @@ static const struct target_core_fabric_ops vhost_scsi_ops = {
 	.tfc_tpg_attrib_attrs		= vhost_scsi_tpg_attrib_attrs,
 };
 
+// zhou: README,
 static int __init vhost_scsi_init(void)
 {
 	int ret = -ENOMEM;

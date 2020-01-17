@@ -69,6 +69,11 @@ static struct attribute *virtio_dev_attrs[] = {
 };
 ATTRIBUTE_GROUPS(virtio_dev);
 
+// zhou: used by drivers/base/core.c device_register() to find bus "virtio" device corresponding
+//   driver.
+//   dev, passed by register_virtio_device()->device_register(), which detected by PCI bus, virtio_pci driver;
+//   id, passed by virtio_net/... id_table[], which specified the device type such as VIRTIO_ID_NET.
+
 static inline int virtio_id_match(const struct virtio_device *dev,
 				  const struct virtio_device_id *id)
 {
@@ -80,6 +85,7 @@ static inline int virtio_id_match(const struct virtio_device *dev,
 
 /* This looks through all the IDs a driver claims to support.  If any of them
  * match, we return 1 and the kernel will call virtio_dev_probe(). */
+// zhou:
 static int virtio_dev_match(struct device *_dv, struct device_driver *_dr)
 {
 	unsigned int i;
@@ -190,6 +196,7 @@ int virtio_finalize_features(struct virtio_device *dev)
 }
 EXPORT_SYMBOL_GPL(virtio_finalize_features);
 
+// zhou: README, probe() function provided by bus(virtio).
 static int virtio_dev_probe(struct device *_d)
 {
 	int err, i;
@@ -202,6 +209,7 @@ static int virtio_dev_probe(struct device *_d)
 	/* We have a driver! */
 	virtio_add_status(dev, VIRTIO_CONFIG_S_DRIVER);
 
+    // zhou: detect an virtio device emulated by Hypervisor/Qemu.
 	/* Figure out what features the device supports. */
 	device_features = dev->config->get_features(dev);
 
@@ -282,20 +290,28 @@ static int virtio_dev_remove(struct device *_d)
 	return 0;
 }
 
+// zhou: bus callback function invoked by bus framework.
 static struct bus_type virtio_bus = {
 	.name  = "virtio",
 	.match = virtio_dev_match,
 	.dev_groups = virtio_dev_groups,
 	.uevent = virtio_uevent,
+    // zhou: will invoke each type of virtio device's probe function, e.g.
+    //       "virtnet_probe()"
 	.probe = virtio_dev_probe,
 	.remove = virtio_dev_remove,
 };
 
+// zhou: Used by virtio_net/virtio_scsi/... to register a driver to virtio bus,
+//       told virtio bus that once detect there is new virtio device which detected
+//       by virtio bus, try this driver's probe function also.
 int register_virtio_driver(struct virtio_driver *driver)
 {
 	/* Catch this early. */
 	BUG_ON(driver->feature_table_size && !driver->feature_table);
 	driver->driver.bus = &virtio_bus;
+
+    // zhou: register driver with bus, such "virtio_net", "virtio_blk", ...
 	return driver_register(&driver->driver);
 }
 EXPORT_SYMBOL_GPL(register_virtio_driver);
@@ -315,6 +331,7 @@ EXPORT_SYMBOL_GPL(unregister_virtio_driver);
  *
  * Returns: 0 on suceess, -error on failure
  */
+// zhou: README,
 int register_virtio_device(struct virtio_device *dev)
 {
 	int err;
@@ -328,6 +345,11 @@ int register_virtio_device(struct virtio_device *dev)
 		goto out;
 
 	dev->index = err;
+
+    // zhou: unlike the PCI use address to naming PCI device. Different bus have
+    //       their naming rules.
+    //       PCI(e.g. 0000:00:02.1), USB(e.g. 2-1:1.0), SCSI(e.g. target0:0:10).
+
 	dev_set_name(&dev->dev, "virtio%u", dev->index);
 
 	spin_lock_init(&dev->config_lock);
@@ -343,6 +365,9 @@ int register_virtio_device(struct virtio_device *dev)
 
 	INIT_LIST_HEAD(&dev->vqs);
 
+    // zhou: add a virtio device to virtio bus, then virtio bus will scan all
+    //       registered virtio driver's ID and call probe function, e.g.
+    //       virtio_net is virtnet_probe().
 	/*
 	 * device_add() causes the bus infrastructure to look for a matching
 	 * driver.

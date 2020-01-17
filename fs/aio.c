@@ -94,6 +94,7 @@ struct ctx_rq_wait {
 	atomic_t count;
 };
 
+// zhou: created when io_setup() invoked in userspace.
 struct kioctx {
 	struct percpu_ref	users;
 	atomic_t		dead;
@@ -134,6 +135,7 @@ struct kioctx {
 	 */
 	struct ctx_rq_wait	*rq_wait;
 
+    // zhou: no name for this struct, just for cacheline alignment.
 	struct {
 		/*
 		 * This counts the number of available slots in the ringbuffer,
@@ -151,6 +153,7 @@ struct kioctx {
 		struct list_head active_reqs;	/* used for cancellation */
 	} ____cacheline_aligned_in_smp;
 
+    // zhou: who will wait here?
 	struct {
 		struct mutex	ring_lock;
 		wait_queue_head_t wait;
@@ -187,6 +190,9 @@ struct poll_iocb {
 	struct wait_queue_entry	wait;
 	struct work_struct	work;
 };
+
+
+// zhou: corresponding struct iocb in userspace.
 
 /*
  * NOTE! Each of the iocb union members has the file pointer
@@ -1300,10 +1306,10 @@ static long read_events(struct kioctx *ctx, long min_nr, long nr,
  *	Create an aio_context capable of receiving at least nr_events.
  *	ctxp must not point to an aio_context that already exists, and
  *	must be initialized to 0 prior to the call.  On successful
- *	creation of the aio_context, *ctxp is filled in with the resulting 
+ *	creation of the aio_context, *ctxp is filled in with the resulting
  *	handle.  May fail with -EINVAL if *ctxp is not initialized,
- *	if the specified nr_events exceeds internal limits.  May fail 
- *	with -EAGAIN if the specified nr_events exceeds the user's limit 
+ *	if the specified nr_events exceeds internal limits.  May fail
+ *	with -EAGAIN if the specified nr_events exceeds the user's limit
  *	of available events.  May fail with -ENOMEM if insufficient kernel
  *	resources are available.  May fail with -EFAULT if an invalid
  *	pointer is passed for ctxp.  Will fail with -ENOSYS if not
@@ -1373,7 +1379,7 @@ out:
 #endif
 
 /* sys_io_destroy:
- *	Destroy the aio_context specified.  May cancel any outstanding 
+ *	Destroy the aio_context specified.  May cancel any outstanding
  *	AIOs and block on completion.  Will fail with -ENOSYS if not
  *	implemented.  May fail with -EINVAL if the context pointed to
  *	is invalid.

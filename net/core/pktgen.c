@@ -3410,6 +3410,7 @@ static void pktgen_xmit(struct pktgen_dev *pkt_dev)
 	refcount_add(burst, &pkt_dev->skb->users);
 
 xmit_more:
+    // zhou:
 	ret = netdev_start_xmit(pkt_dev->skb, odev, txq, --burst > 0);
 
 	switch (ret) {
@@ -3857,6 +3858,8 @@ static struct pernet_operations pg_net_ops = {
 	.size = sizeof(struct pktgen_net),
 };
 
+// zhou: pktgen is a kernel mode Packet Generator. There is another version
+//       based on DPDK.
 static int __init pg_init(void)
 {
 	int ret = 0;

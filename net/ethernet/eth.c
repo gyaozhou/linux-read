@@ -360,6 +360,7 @@ int eth_validate_addr(struct net_device *dev)
 }
 EXPORT_SYMBOL(eth_validate_addr);
 
+// zhou: README,
 const struct header_ops eth_header_ops ____cacheline_aligned = {
 	.create		= eth_header,
 	.parse		= eth_header_parse,
@@ -374,12 +375,16 @@ const struct header_ops eth_header_ops ____cacheline_aligned = {
  *
  * Fill in the fields of the device structure with Ethernet-generic values.
  */
+// zhou: this function will be invoked at the same time of allocing "net_device".
 void ether_setup(struct net_device *dev)
 {
+    // zhou: collection for operation
 	dev->header_ops		= &eth_header_ops;
 	dev->type		= ARPHRD_ETHER;
 	dev->hard_header_len 	= ETH_HLEN;
 	dev->min_header_len	= ETH_HLEN;
+
+    // zhou: payload size of Ethernet, 1500
 	dev->mtu		= ETH_DATA_LEN;
 	dev->min_mtu		= ETH_MIN_MTU;
 	dev->max_mtu		= ETH_DATA_LEN;
@@ -392,6 +397,8 @@ void ether_setup(struct net_device *dev)
 
 }
 EXPORT_SYMBOL(ether_setup);
+
+// zhou: always invoked by xxx_probe() within NIC driver.
 
 /**
  * alloc_etherdev_mqs - Allocates and sets up an Ethernet device
@@ -411,6 +418,7 @@ EXPORT_SYMBOL(ether_setup);
 struct net_device *alloc_etherdev_mqs(int sizeof_priv, unsigned int txqs,
 				      unsigned int rxqs)
 {
+    // zhou: "ether_setup" callback function to init Ethernet Network Device
 	return alloc_netdev_mqs(sizeof_priv, "eth%d", NET_NAME_UNKNOWN,
 				ether_setup, txqs, rxqs);
 }

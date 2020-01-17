@@ -997,6 +997,7 @@ static void neigh_invalidate(struct neighbour *neigh)
 	neigh->arp_queue_len_bytes = 0;
 }
 
+// zhou: general interface for sending e.g. ARP Request in IPv4.
 static void neigh_probe(struct neighbour *neigh)
 	__releases(neigh->lock)
 {

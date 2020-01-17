@@ -128,6 +128,11 @@ static void remove(struct pci_dev *pdev)
 	kfree(gdev);
 }
 
+// zhou: this is a PCI driver. It will do nothing, but only expose a way to
+//       access PCI memory from userspace.
+//       As generic PCI driver, UIO_PCI_DRIVER can not auto probe device ID.
+//       So, user should manually binding with PCI address.
+//       DPDK could utilize this feature to set PCI ethernet device memory.
 static struct pci_driver uio_pci_driver = {
 	.name = "uio_pci_generic",
 	.id_table = NULL, /* only dynamic id's */

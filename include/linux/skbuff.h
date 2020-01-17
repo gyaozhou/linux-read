@@ -291,6 +291,7 @@ struct sk_buff_head {
 	struct sk_buff	*next;
 	struct sk_buff	*prev;
 
+    // zhou: number of "struct sk_buff" in this list.
 	__u32		qlen;
 	spinlock_t	lock;
 };
@@ -504,6 +505,7 @@ int skb_zerocopy_iter_stream(struct sock *sk, struct sk_buff *skb,
 			     struct msghdr *msg, int len,
 			     struct ubuf_info *uarg);
 
+// zhou:
 /* This data is invariant across clones and lives at
  * the end of the header data, ie. at skb->end.
  */
@@ -681,7 +683,7 @@ typedef unsigned char *sk_buff_data_t;
  *	@users: User count - see {datagram,tcp}.c
  *	@extensions: allocated extensions, valid if active_extensions is nonzero
  */
-
+// zhou:
 struct sk_buff {
 	union {
 		struct {
@@ -717,6 +719,7 @@ struct sk_buff {
 	 * want to keep them across layers you have to do a skb_clone()
 	 * first. This is owned by whoever has the skb queued ATM.
 	 */
+    // zhou: used in every layer internal control used.
 	char			cb[48] __aligned(8);
 
 	union {
@@ -873,8 +876,11 @@ struct sk_buff {
 	/* public: */
 
 	/* These elements must be at the end, see alloc_skb() for details.  */
+    // zhou: offset of valid data
 	sk_buff_data_t		tail;
+    // zhou: offset of whole space
 	sk_buff_data_t		end;
+    // zhou: start address of whole space; start address of valid data
 	unsigned char		*head,
 				*data;
 	unsigned int		truesize;
@@ -885,6 +891,7 @@ struct sk_buff {
 	struct skb_ext		*extensions;
 #endif
 };
+// zhou: end of "struct sk_buff"
 
 #ifdef __KERNEL__
 /*
@@ -951,6 +958,7 @@ static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
  * will be avoided by refdst_drop. If dst entry is not cached, we take
  * reference, so that last dst_release can destroy the dst immediately.
  */
+// zhou: used in PF_RING
 static inline void skb_dst_set_noref(struct sk_buff *skb, struct dst_entry *dst)
 {
 	WARN_ON(!rcu_read_lock_held() && !rcu_read_lock_bh_held());
@@ -1399,6 +1407,7 @@ static inline unsigned int skb_end_offset(const struct sk_buff *skb)
 }
 #endif
 
+// zhou:
 /* Internal */
 #define skb_shinfo(SKB)	((struct skb_shared_info *)(skb_end_pointer(SKB)))
 
@@ -2804,7 +2813,7 @@ static inline struct sk_buff *__netdev_alloc_skb_ip_align(struct net_device *dev
 		skb_reserve(skb, NET_IP_ALIGN);
 	return skb;
 }
-
+// zhou: invoked at the softirq handler, aslo can't be blocked, so "GFP_ATOMIC"
 static inline struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev,
 		unsigned int length)
 {

@@ -32,6 +32,8 @@
 #include <linux/prefetch.h>
 #include <linux/pm_runtime.h>
 #include <linux/etherdevice.h>
+
+// zhou: Direct Cache Access (DCA)
 #ifdef CONFIG_IGB_DCA
 #include <linux/dca.h>
 #endif
@@ -206,6 +208,8 @@ static struct notifier_block dca_notifier = {
 };
 #endif
 #ifdef CONFIG_PCI_IOV
+
+// zhou: max_vfs, is a module parameter
 static unsigned int max_vfs;
 module_param(max_vfs, uint, 0);
 MODULE_PARM_DESC(max_vfs, "Maximum number of virtual functions to allocate per physical function");
@@ -224,12 +228,16 @@ static const struct pci_error_handlers igb_err_handler = {
 
 static void igb_init_dmac(struct igb_adapter *adapter, u32 pba);
 
+// zhou: handle PCI events, probe, supend/resume within power management,...
 static struct pci_driver igb_driver = {
 	.name     = igb_driver_name,
+    // zhou: Hardware list can be handled by this driver
 	.id_table = igb_pci_tbl,
+    // zhou: functionality procedure
 	.probe    = igb_probe,
 	.remove   = igb_remove,
 #ifdef CONFIG_PM
+    // zhou: Power Management capability
 	.driver.pm = &igb_pm_ops,
 #endif
 	.shutdown = igb_shutdown,
@@ -662,6 +670,8 @@ struct net_device *igb_get_hw_dev(struct e1000_hw *hw)
  *  igb_init_module is the first routine called when the driver is
  *  loaded. All it does is register with the PCI subsystem.
  **/
+// zhou: register as a PCI device driver firstly, then wait for the PCI bug detect
+//       the network device we intersted.
 static int __init igb_init_module(void)
 {
 	int ret;
@@ -673,6 +683,8 @@ static int __init igb_init_module(void)
 #ifdef CONFIG_IGB_DCA
 	dca_register_notify(&dca_notifier);
 #endif
+    // zhou: let PCI core system understand this new PCI device driver,
+    //       which contains the chips it support.
 	ret = pci_register_driver(&igb_driver);
 	return ret;
 }
@@ -715,6 +727,7 @@ static void igb_cache_ring_register(struct igb_adapter *adapter)
 		 * In order to avoid collision we start at the first free queue
 		 * and continue consuming queues in the same sequence
 		 */
+        // zhou: VFs were allocated at the first "vfs_allocated_count" rings.
 		if (adapter->vfs_allocated_count) {
 			for (; i < adapter->rss_queues; i++)
 				adapter->rx_ring[i]->reg_idx = rbase_offset +
@@ -772,6 +785,8 @@ u32 igb_rd32(struct e1000_hw *hw, u32 reg)
  *  each containing an cause allocation for an Rx and Tx ring, and a
  *  variable number of rows depending on the number of queues supported.
  **/
+// zhou: refer to "8.8.13 Interrupt Vector Allocation Registers - IVAR "
+//       Connect each RX/TX queue event with vector
 static void igb_write_ivar(struct e1000_hw *hw, int msix_vector,
 			   int index, int offset)
 {
@@ -822,6 +837,8 @@ static void igb_assign_vector(struct igb_q_vector *q_vector, int msix_vector)
 		 * lower 3 bits as the row index, and the 4th bit as the
 		 * column offset.
 		 */
+        // zhou: refer to, Table 7-43. Cause Allocation in the IVAR Registers
+        //       Non-IOV Mode
 		if (rx_queue > IGB_N0_QUEUE)
 			igb_write_ivar(hw, msix_vector,
 				       rx_queue & 0x7,
@@ -858,6 +875,7 @@ static void igb_assign_vector(struct igb_q_vector *q_vector, int msix_vector)
 		break;
 	}
 
+    // zhou: the mask is quite important when irq disable/enable.
 	/* add q_vector eims value to global eims_enable_mask */
 	adapter->eims_enable_mask |= q_vector->eims_value;
 
@@ -872,6 +890,7 @@ static void igb_assign_vector(struct igb_q_vector *q_vector, int msix_vector)
  *  igb_configure_msix sets up the hardware to properly
  *  generate MSI-X interrupts.
  **/
+// zhou: set up the hardware to properly generate MSI-X interrupts
 static void igb_configure_msix(struct igb_adapter *adapter)
 {
 	u32 tmp;
@@ -908,10 +927,17 @@ static void igb_configure_msix(struct igb_adapter *adapter)
 		/* Turn on MSI-X capability first, or our settings
 		 * won't stick.  And it will take days to debug.
 		 */
+        // zhou: refer to, 8.8.15 General Purpose Interrupt Enable - GPIE
+		//       Use EIAM to auto-mask when MSI-X interrupt is asserted
+		//       this saves a register write for every interrupt
 		wr32(E1000_GPIE, E1000_GPIE_MSIX_MODE |
 		     E1000_GPIE_PBA | E1000_GPIE_EIAME |
 		     E1000_GPIE_NSICR);
 
+        // zhou: vector==0, INT_Alloc[33] = 0, which means when "other" cause interrupt,
+        //       redirect to vector idx=0.
+        //       INT_Alloc[32], TCP timer interrupt was not used.
+        //       Refer to, 8.8.14 Interrupt Vector Allocation Registers - MISC IVAR_MISC
 		/* enable msix_other interrupt */
 		adapter->eims_other = BIT(vector);
 		tmp = (vector++ | E1000_IVAR_VALID) << 8;
@@ -925,6 +951,7 @@ static void igb_configure_msix(struct igb_adapter *adapter)
 
 	adapter->eims_enable_mask |= adapter->eims_other;
 
+    // zhou: for vector>0, setup RX/TX queue related registers
 	for (i = 0; i < adapter->num_q_vectors; i++)
 		igb_assign_vector(adapter->q_vector[i], vector++);
 
@@ -938,11 +965,13 @@ static void igb_configure_msix(struct igb_adapter *adapter)
  *  igb_request_msix allocates MSI-X vectors and requests interrupts from the
  *  kernel.
  **/
+// zhou: setup MSI-X interrupt handler.
 static int igb_request_msix(struct igb_adapter *adapter)
 {
 	struct net_device *netdev = adapter->netdev;
 	int i, err = 0, vector = 0, free_vector = 0;
 
+    // zhou: MSI-X vector==0, used to handler other events beside TX/RX.
 	err = request_irq(adapter->msix_entries[vector].vector,
 			  igb_msix_other, 0, netdev->name, adapter);
 	if (err)
@@ -967,6 +996,8 @@ static int igb_request_msix(struct igb_adapter *adapter)
 		else
 			sprintf(q_vector->name, "%s-unused", netdev->name);
 
+        // zhou: MSI-X vector>0, used to handler TX/RX events.
+        //       No matter lagecy interrupt or MSI/MSI-X, register procedure are same.
 		err = request_irq(adapter->msix_entries[vector].vector,
 				  igb_msix_ring, 0, q_vector->name,
 				  q_vector);
@@ -974,6 +1005,9 @@ static int igb_request_msix(struct igb_adapter *adapter)
 			goto err_free;
 	}
 
+    // zhou: write register(IVAR of 82576) to map "Interrupt Cause" with "Vector"
+    //       We have assumed that the idx==0 used for "igb_msix_other()", other for
+    //       "igb_msix_ring()".
 	igb_configure_msix(adapter);
 	return 0;
 
@@ -1086,6 +1120,10 @@ static void igb_clear_interrupt_scheme(struct igb_adapter *adapter)
 	igb_reset_interrupt_capability(adapter);
 }
 
+// zhou: the number of RSS queue decide how many RX queue could be used. Of course, we can
+//       disable RSS and VF. At the same time, vector number equal to RX + TX queues.
+//       Refer to, "Datasheet: Table 7-1. Queue Allocation"
+
 /**
  *  igb_set_interrupt_capability - set MSI or MSI-X if supported
  *  @adapter: board private structure to initialize
@@ -1103,6 +1141,7 @@ static void igb_set_interrupt_capability(struct igb_adapter *adapter, bool msix)
 		goto msi_only;
 	adapter->flags |= IGB_FLAG_HAS_MSIX;
 
+    // zhou: why RX queue number is not equal to TX queue number in case of VF???
 	/* Number of supported queues. */
 	adapter->num_rx_queues = adapter->rss_queues;
 	if (adapter->vfs_allocated_count)
@@ -1113,24 +1152,34 @@ static void igb_set_interrupt_capability(struct igb_adapter *adapter, bool msix)
 	/* start with one vector for every Rx queue */
 	numvecs = adapter->num_rx_queues;
 
+    // zhou: TX and RX DO NOT share one interrupt
 	/* if Tx handler is separate add 1 for every Tx queue */
 	if (!(adapter->flags & IGB_FLAG_QUEUE_PAIRS))
 		numvecs += adapter->num_tx_queues;
 
+    // zhou: interrupts handled by "igb_msix_ring()"
 	/* store the number of vectors reserved for queues */
 	adapter->num_q_vectors = numvecs;
 
+    // zhou: interrupt handled by "igb_msix_other()"
 	/* add 1 vector for link status interrupts */
 	numvecs++;
 	for (i = 0; i < numvecs; i++)
 		adapter->msix_entries[i].entry = i;
 
+    // zhou: configure device's MSI-X capability structure.
+    //       Kernel PCI system fill out "msix_entries.vector"
 	err = pci_enable_msix_range(adapter->pdev,
 				    adapter->msix_entries,
 				    numvecs,
 				    numvecs);
+
+    // zhou: enable MSI-X successfully
 	if (err > 0)
 		return;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // zhou: all below is MSI only, so not be used in normal case.
 
 	igb_reset_interrupt_capability(adapter);
 
@@ -1157,6 +1206,8 @@ msi_only:
 #endif
 	adapter->vfs_allocated_count = 0;
 	adapter->rss_queues = 1;
+
+    // zhou: MSI RX/TX share one.
 	adapter->flags |= IGB_FLAG_QUEUE_PAIRS;
 	adapter->num_rx_queues = 1;
 	adapter->num_tx_queues = 1;
@@ -1184,6 +1235,12 @@ static void igb_add_ring(struct igb_ring *ring,
  *
  *  We allocate one q_vector.  If allocation fails we return -ENOMEM.
  **/
+// zhou: Allocate a array whose elements will be the argument "data" of interrupt
+//       callback function.
+//       If "txr_count" is 0, don't care "txr_idx";
+//       If "rxr_count" is 0, don't care "rxr_idx".
+//       "v_count", total vector number; "v_idx", index for vector.
+
 static int igb_alloc_q_vector(struct igb_adapter *adapter,
 			      int v_count, int v_idx,
 			      int txr_count, int txr_idx,
@@ -1194,6 +1251,8 @@ static int igb_alloc_q_vector(struct igb_adapter *adapter,
 	int ring_count;
 	size_t size;
 
+    // zhou: 1 RX Q, fine; 1 TX Q, fine; 1 RX Q and 1 TX Q, fine; others, FAULT.
+    //       There is no any meaning if 2 RX Q share 1 interrupt, we can just alloc 1 Q!!
 	/* igb only supports 1 Tx and/or 1 Rx queue per vector */
 	if (txr_count > 1 || rxr_count > 1)
 		return -ENOMEM;
@@ -1201,6 +1260,7 @@ static int igb_alloc_q_vector(struct igb_adapter *adapter,
 	ring_count = txr_count + rxr_count;
 	size = struct_size(q_vector, ring, ring_count);
 
+    // zhou: "q_vector[MAX_Q_VECTORS==8]", "v_idx" <= "adapter->num_q_vectors".
 	/* allocate q_vector and rings */
 	q_vector = adapter->q_vector[v_idx];
 	if (!q_vector) {
@@ -1229,6 +1289,7 @@ static int igb_alloc_q_vector(struct igb_adapter *adapter,
 	q_vector->itr_register = adapter->io_addr + E1000_EITR(0);
 	q_vector->itr_val = IGB_START_ITR;
 
+    // zhou: "igb_rings" are co-allocated with the "igb_q_vector"
 	/* initialize pointer to rings */
 	ring = q_vector->ring;
 
@@ -1320,6 +1381,9 @@ static int igb_alloc_q_vector(struct igb_adapter *adapter,
  *  We allocate one q_vector per queue interrupt.  If allocation fails we
  *  return -ENOMEM.
  **/
+// zhou: allocate MSI-X vector for each queue in PF/VF.
+//       "q_vector" ==> queues related vectors.
+
 static int igb_alloc_q_vectors(struct igb_adapter *adapter)
 {
 	int q_vectors = adapter->num_q_vectors;
@@ -1343,6 +1407,7 @@ static int igb_alloc_q_vectors(struct igb_adapter *adapter)
 	}
 
 	for (; v_idx < q_vectors; v_idx++) {
+        // zhou: how many TX/RX queues share one vector
 		int rqpv = DIV_ROUND_UP(rxr_remaining, q_vectors - v_idx);
 		int tqpv = DIV_ROUND_UP(txr_remaining, q_vectors - v_idx);
 
@@ -1379,19 +1444,23 @@ err_out:
  *
  *  This function initializes the interrupts and allocates all of the queues.
  **/
+// zhou: key function of handler interrupt mapping.
 static int igb_init_interrupt_scheme(struct igb_adapter *adapter, bool msix)
 {
 	struct pci_dev *pdev = adapter->pdev;
 	int err;
 
+    // zhou: get RX, TX queue and MSI-X vectors number, according VF number and chip capability
 	igb_set_interrupt_capability(adapter, msix);
 
+    // zhou: init the structure in host memory for RX/TX ring(queue) and vector.
 	err = igb_alloc_q_vectors(adapter);
 	if (err) {
 		dev_err(&pdev->dev, "Unable to allocate memory for vectors\n");
 		goto err_alloc_q_vectors;
 	}
 
+    // zhou: init register cache within the structure which will be used in igb_config_xxx()
 	igb_cache_ring_register(adapter);
 
 	return 0;
@@ -1416,6 +1485,8 @@ static int igb_request_irq(struct igb_adapter *adapter)
 
 	if (adapter->flags & IGB_FLAG_HAS_MSIX) {
 		err = igb_request_msix(adapter);
+
+        // zhou: MSI-X STOP here.
 		if (!err)
 			goto request_done;
 		/* fall back to MSI */
@@ -1432,6 +1503,7 @@ static int igb_request_irq(struct igb_adapter *adapter)
 		igb_configure(adapter);
 	}
 
+    // zhou: Legacy interrupt setting
 	igb_assign_vector(adapter->q_vector[0], 0);
 
 	if (adapter->flags & IGB_FLAG_HAS_MSI) {
@@ -1584,6 +1656,7 @@ static void igb_release_hw_control(struct igb_adapter *adapter)
  *  For ASF and Pass Through versions of f/w this means that
  *  the driver is loaded.
  **/
+// zhou: driver take charge of hardware
 static void igb_get_hw_control(struct igb_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
@@ -1992,21 +2065,29 @@ static void igb_configure(struct igb_adapter *adapter)
 	int i;
 
 	igb_get_hw_control(adapter);
+    // zhou: each PF and VF, unicast/multicast/promiscuous mode set.
 	igb_set_rx_mode(netdev);
 	igb_setup_tx_mode(adapter);
 
+    // zhou: hardware insert/remvoe VLAN tag
 	igb_restore_vlan(adapter);
 
+    // zhou: configure the transmit control registers
 	igb_setup_tctl(adapter);
+    // zhou: configure the multiple receive queue control registers
 	igb_setup_mrqc(adapter);
+    // zhou: configure the receive control registers
 	igb_setup_rctl(adapter);
 
 	igb_nfc_filter_restore(adapter);
+
+    // zhou: ring related regsiters
 	igb_configure_tx(adapter);
 	igb_configure_rx(adapter);
 
 	igb_rx_fifo_flush_82575(&adapter->hw);
 
+    // zhou: allocate 1 Page memory for each slot, to reserve 1 packet.
 	/* call igb_desc_unused which always leaves
 	 * at least 1 descriptor unused to make sure
 	 * next_to_use != next_to_clean
@@ -2180,6 +2261,7 @@ void igb_down(struct igb_adapter *adapter)
 
 	igb_nfc_filter_exit(adapter);
 
+    // zhou: set carrier state off which impact net/sched
 	netif_carrier_off(netdev);
 	netif_tx_stop_all_queues(netdev);
 
@@ -2425,6 +2507,7 @@ void igb_reset(struct igb_adapter *adapter)
 
 	igb_update_mng_vlan(adapter);
 
+    // zhou: refer to "8.2.7 VLAN Ether Type - VET "
 	/* Enable h/w to recognize an 802.1Q VLAN Ethernet packet */
 	wr32(E1000_VET, ETHERNET_IEEE_VLAN_TYPE);
 
@@ -2834,6 +2917,7 @@ static int igb_setup_tc(struct net_device *dev, enum tc_setup_type type,
 	}
 }
 
+// zhou: callback functions invoked by kernel
 static const struct net_device_ops igb_netdev_ops = {
 	.ndo_open		= igb_open,
 	.ndo_stop		= igb_close,
@@ -2986,6 +3070,10 @@ static s32 igb_init_i2c(struct igb_adapter *adapter)
 	return status;
 }
 
+// zhou: network device init, invoked by PCI system when matching ".id_table"
+//       Basically, here just implement general capability and configuration.
+//       The transmit and receive packets related configuration will be done
+//       when opening device by ioctl.
 /**
  *  igb_probe - Device Initialization Routine
  *  @pdev: PCI device information struct
@@ -3025,8 +3113,10 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pci_using_dac = 0;
 	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 	if (!err) {
+        // zhou: DMA controller enabled
 		pci_using_dac = 1;
 	} else {
+        // zhou: if 64 bits was not supported, downgrade to 32 bits.
 		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 		if (err) {
 			dev_err(&pdev->dev,
@@ -3041,10 +3131,15 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	pci_enable_pcie_error_reporting(pdev);
 
+    // zhou: write and save the PCI configuration space of this device by
+    //       pci_bus_write_config_word()/pci_bus_read_config_word()
 	pci_set_master(pdev);
 	pci_save_state(pdev);
 
+    ////////////////////////////////////////////////////////////////////////////
+    // zhou: here we begin to handle "net_device"
 	err = -ENOMEM;
+    // zhou: Define TX/RX queue number
 	netdev = alloc_etherdev_mq(sizeof(struct igb_adapter),
 				   IGB_MAX_TX_QUEUES);
 	if (!netdev)
@@ -3052,6 +3147,7 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 
+    // zhou: connect "device" to "net_device"
 	pci_set_drvdata(pdev, netdev);
 	adapter = netdev_priv(netdev);
 	adapter->netdev = netdev;
@@ -3073,6 +3169,7 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	strncpy(netdev->name, pci_name(pdev), sizeof(netdev->name) - 1);
 
+    // zhou: Bar0, Global Configuration Registers(CSR) space
 	netdev->mem_start = pci_resource_start(pdev, 0);
 	netdev->mem_end = pci_resource_end(pdev, 0);
 
@@ -3097,6 +3194,7 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (err)
 		goto err_sw_init;
 
+    // zhou: read PCIe Bus information from hardware, put them in "igb_private->hw"
 	igb_get_bus_info_pcie(hw);
 
 	hw->phy.autoneg_wait_to_complete = false;
@@ -3111,6 +3209,8 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (igb_check_reset_block(hw))
 		dev_info(&pdev->dev,
 			"PHY reset is blocked due to SOL/IDER session.\n");
+
+    ////////////////////////////////////////////////////////////////////////////
 
 	/* features is initialized to 0 in allocation, it might have bits
 	 * set by igb_sw_init so we should use an or instead of an
@@ -3320,6 +3420,9 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			adapter->flags |= IGB_FLAG_WOL_SUPPORTED;
 	}
 
+    ////////////////////////////////////////////////////////////////////////////
+    // zhou: Wake up Power Management Module
+
 	device_set_wakeup_enable(&adapter->pdev->dev,
 				 adapter->flags & IGB_FLAG_WOL_SUPPORTED);
 
@@ -3339,6 +3442,7 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	igb_get_hw_control(adapter);
 
 	strcpy(netdev->name, "eth%d");
+    // zhou: make this network device visible to kernel core system
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;
@@ -3383,6 +3487,8 @@ static int igb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	igb_ptp_init(adapter);
 
 	dev_info(&pdev->dev, "Intel(R) Gigabit Ethernet Network Connection\n");
+
+    // zhou: width, how many lanes supported. 2.5G PCI-E version1.0, 5.0G v2.0
 	/* print bus type/speed/width info, not applicable to i354 */
 	if (hw->mac.type != e1000_i354) {
 		dev_info(&pdev->dev, "%s: (PCIe:%s:%s) %pM\n",
@@ -3681,6 +3787,7 @@ static void igb_remove(struct pci_dev *pdev)
 	pci_disable_device(pdev);
 }
 
+// zhou: VF related setting.
 /**
  *  igb_probe_vfs - Initialize vf data storage and add VFs to pci config space
  *  @adapter: board private structure to initialize
@@ -3736,6 +3843,7 @@ unsigned int igb_get_max_rss_queues(struct igb_adapter *adapter)
 		/* fall through */
 	case e1000_82576:
 		if (!!adapter->vfs_allocated_count) {
+            // zhou: only 2 RSS queues.
 			max_rss_queues = 2;
 			break;
 		}
@@ -3796,6 +3904,7 @@ void igb_set_flag_queue_pairs(struct igb_adapter *adapter,
  *  Fields are initialized based on PCI device information and
  *  OS network device settings (MTU size).
  **/
+// zhou: this model specific, private data---"igb_adapter"
 static int igb_sw_init(struct igb_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
@@ -3828,6 +3937,8 @@ static int igb_sw_init(struct igb_adapter *adapter)
 		if (max_vfs > 7) {
 			dev_warn(&pdev->dev,
 				 "Maximum of 7 VFs per PF, using max\n");
+            // zhou: 82576 can serves up to 8 VMs, but we have to reserve
+            //       one for host!!! Otherwise, host can't receive/transmit any packets.
 			max_vfs = adapter->vfs_allocated_count = 7;
 		} else
 			adapter->vfs_allocated_count = max_vfs;
@@ -3851,6 +3962,7 @@ static int igb_sw_init(struct igb_adapter *adapter)
 
 	igb_probe_vfs(adapter);
 
+    // zhou: init RSS queue number
 	igb_init_queue_configuration(adapter);
 
 	/* Setup and initialize a copy of the hw vlan table array */
@@ -3858,6 +3970,9 @@ static int igb_sw_init(struct igb_adapter *adapter)
 				       GFP_KERNEL);
 	if (!adapter->shadow_vfta)
 		return -ENOMEM;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // zhou: alloc interrupt vector and setup interrupt handler
 
 	/* This call may decrease the number of queues */
 	if (igb_init_interrupt_scheme(adapter, true)) {
@@ -3875,6 +3990,7 @@ static int igb_sw_init(struct igb_adapter *adapter)
 	return 0;
 }
 
+// zhou: driver alloc TX/RX resource at this time. Invoked when firstly started.
 /**
  *  igb_open - Called when a network interface is made active
  *  @netdev: network interface device structure
@@ -3918,6 +4034,9 @@ static int __igb_open(struct net_device *netdev, bool resuming)
 
 	igb_power_up_link(adapter);
 
+    // zhou: when tx/rx resources were ready, manage queue/ring related registers.
+    //       And others registers, of course.
+
 	/* before we allocate an interrupt, we must be ready to handle it.
 	 * Setting DEBUG_SHIRQ in the kernel makes it fire an interrupt
 	 * as soon as we call pci_request_irq, so we have to setup our
@@ -3925,6 +4044,7 @@ static int __igb_open(struct net_device *netdev, bool resuming)
 	 */
 	igb_configure(adapter);
 
+    // zhou: manage interrupt related registers
 	err = igb_request_irq(adapter);
 	if (err)
 		goto err_req_irq;
@@ -3960,6 +4080,7 @@ static int __igb_open(struct net_device *netdev, bool resuming)
 		wr32(E1000_CTRL_EXT, reg_data);
 	}
 
+    // zhou: set flag "__QUEUE_STATE_DRV_XOFF"
 	netif_tx_start_all_queues(netdev);
 
 	if (!resuming)
@@ -4044,6 +4165,7 @@ int igb_setup_tx_resources(struct igb_ring *tx_ring)
 
 	size = sizeof(struct igb_tx_buffer) * tx_ring->count;
 
+    // zhou: IGB_DEFAULT_TXD(256) by default
 	tx_ring->tx_buffer_info = vmalloc(size);
 	if (!tx_ring->tx_buffer_info)
 		goto err;
@@ -4136,16 +4258,23 @@ void igb_configure_tx_ring(struct igb_adapter *adapter,
 	u64 tdba = ring->dma;
 	int reg_idx = ring->reg_idx;
 
+    // zhou: refer to "8.12.10 Transmit Descriptor Ring Length - TDLEN"
 	wr32(E1000_TDLEN(reg_idx),
 	     ring->count * sizeof(union e1000_adv_tx_desc));
+
+    // zhou: refer to "8.12.8 Transmit Descriptor Base Address Low"
 	wr32(E1000_TDBAL(reg_idx),
 	     tdba & 0x00000000ffffffffULL);
+
+    // zhou: refer to "8.12.9 Transmit Descriptor Base Address High"
 	wr32(E1000_TDBAH(reg_idx), tdba >> 32);
 
+    // zhou: refer to "8.12.11 Transmit Descriptor Head"
 	ring->tail = adapter->io_addr + E1000_TDT(reg_idx);
 	wr32(E1000_TDH(reg_idx), 0);
 	writel(0, ring->tail);
 
+    // zhou: refer to "8.12.13 Transmit Descriptor Control - TXDCTL"
 	txdctl |= IGB_TX_PTHRESH;
 	txdctl |= IGB_TX_HTHRESH << 8;
 	txdctl |= IGB_TX_WTHRESH << 16;
@@ -4790,6 +4919,7 @@ static void igb_clean_all_rx_rings(struct igb_adapter *adapter)
  *
  *  Returns 0 on success, negative on failure
  **/
+// zhou: change MAC address
 static int igb_set_mac(struct net_device *netdev, void *p)
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
@@ -4980,6 +5110,7 @@ static void igb_vlan_promisc_disable(struct igb_adapter *adapter)
  *  responsible for configuring the hardware for proper unicast, multicast,
  *  promiscuous mode, and all-multi behavior.
  **/
+// zhou: unicast/multicast/promiscuous mode set
 static void igb_set_rx_mode(struct net_device *netdev)
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
@@ -5063,6 +5194,9 @@ static void igb_set_rx_mode(struct net_device *netdev)
 
 	vmolr |= rd32(E1000_VMOLR(vfn)) &
 		 ~(E1000_VMOLR_ROPE | E1000_VMOLR_MPME | E1000_VMOLR_ROMPE);
+
+    // zhou: refer to "VM Offload Register - VMOLR".
+    //       Each VF related RX mode set.
 
 	/* enable Rx jumbo frames, restrict as needed to support build_skb */
 	vmolr &= ~E1000_VMOLR_RLPML_MASK;
@@ -5218,6 +5352,9 @@ static void igb_watchdog(struct timer_list *t)
 	/* Do the rest outside of interrupt context */
 	schedule_work(&adapter->watchdog_task);
 }
+
+// zhou: will run in workqueue(events/n).
+//       But why put it in workqueue? Not so urgent? No need in softirq context?
 
 static void igb_watchdog_task(struct work_struct *work)
 {
@@ -5923,6 +6060,7 @@ static inline int igb_maybe_stop_tx(struct igb_ring *tx_ring, const u16 size)
 	return __igb_maybe_stop_tx(tx_ring, size);
 }
 
+// zhou: find a empty slot from tx_ring which managed by DMA module
 static int igb_tx_map(struct igb_ring *tx_ring,
 		      struct igb_tx_buffer *first,
 		      const u8 hdr_len)
@@ -6166,6 +6304,7 @@ static inline struct igb_ring *igb_tx_queue_mapping(struct igb_adapter *adapter,
 	return adapter->tx_ring[r_idx];
 }
 
+// zhou: send a frame
 static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 				  struct net_device *netdev)
 {
@@ -6528,6 +6667,7 @@ static void igb_tsync_interrupt(struct igb_adapter *adapter)
 	wr32(E1000_TSICR, ack);
 }
 
+// zhou: handler for MSI-X interrrupt for events beside RX/TX
 static irqreturn_t igb_msix_other(int irq, void *data)
 {
 	struct igb_adapter *adapter = data;
@@ -6567,6 +6707,13 @@ static irqreturn_t igb_msix_other(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+// zhou: looks like just control interrupt interval for each vector member.
+//       "All interrupts are throttled via interrupt moderation.  Interrupt moderation
+//        must be used to avoid interrupt storms while the driver is processing one
+//        interrupt.  The moderation value should be at least as large as the expected
+//        time for the driver to process an interrupt."
+//       Refer to, "linux-3.16.3/Documentation/networking/igb.txt"
+
 static void igb_write_itr(struct igb_q_vector *q_vector)
 {
 	struct igb_adapter *adapter = q_vector->adapter;
@@ -6587,12 +6734,16 @@ static void igb_write_itr(struct igb_q_vector *q_vector)
 	q_vector->set_itr = 0;
 }
 
+// zhou: handler for MSI-X interrupt related RX/TX
 static irqreturn_t igb_msix_ring(int irq, void *data)
 {
 	struct igb_q_vector *q_vector = data;
 
 	/* Write the ITR value calculated from the previous interrupt. */
 	igb_write_itr(q_vector);
+
+    // zhou: schedule sofitirq for NET_TX_SOFTIRQ/NET_RX_SOFTIRQ
+    //       !!!EIAM disabled interrupts (on this vector) for us.
 
 	napi_schedule(&q_vector->napi);
 
@@ -7642,6 +7793,7 @@ static irqreturn_t igb_intr_msi(int irq, void *data)
  *  @irq: interrupt number
  *  @data: pointer to a network interface device structure
  **/
+// zhou: Legacy interrupt handler, not be used when MSI-X enabled.
 static irqreturn_t igb_intr(int irq, void *data)
 {
 	struct igb_adapter *adapter = data;
@@ -7678,15 +7830,26 @@ static irqreturn_t igb_intr(int irq, void *data)
 	if (icr & E1000_ICR_TS)
 		igb_tsync_interrupt(adapter);
 
+    // zhou: raise softirq
 	napi_schedule(&q_vector->napi);
 
 	return IRQ_HANDLED;
 }
 
+// zhou: clear the interrutp mask which disabled when handle MSI-X of each ring.
+//       Re-enable NIC IRQ after finish this round of softirq.
+
 static void igb_ring_irq_enable(struct igb_q_vector *q_vector)
 {
 	struct igb_adapter *adapter = q_vector->adapter;
 	struct e1000_hw *hw = &adapter->hw;
+
+    // zhou: EITR provides a guaranteed inter-interrupt delay between interrupts
+    //       asserted by the 82576, regardless of network traffic conditions.
+    //       To independently validate configuration settings, software can use the
+    //       following algorithm to convert the inter-interrupt interval value to
+    //       the common interrupts/sec.
+    //       Refer to, "7.3.3.2.1 More on Using EITR"
 
 	if ((q_vector->rx.ring && (adapter->rx_itr_setting & 3)) ||
 	    (!q_vector->rx.ring && (adapter->tx_itr_setting & 3))) {
@@ -7703,6 +7866,11 @@ static void igb_ring_irq_enable(struct igb_q_vector *q_vector)
 			igb_irq_enable(adapter);
 	}
 }
+/********************************************************************************
+ *
+ *                       Packets Process
+ *
+ ********************************************************************************/
 
 /**
  *  igb_poll - NAPI Rx polling callback
@@ -7923,6 +8091,7 @@ static bool igb_clean_tx_irq(struct igb_q_vector *q_vector, int napi_budget)
  *
  *  Synchronizes page for reuse by the adapter
  **/
+// zhou: return this single packet buffer to
 static void igb_reuse_rx_page(struct igb_ring *rx_ring,
 			      struct igb_rx_buffer *old_buff)
 {
@@ -7949,6 +8118,9 @@ static inline bool igb_page_is_reserved(struct page *page)
 {
 	return (page_to_nid(page) != numa_mem_id()) || page_is_pfmemalloc(page);
 }
+
+// zhou: even if the packet is completed, we may also reuse the leftover memory of this page.
+//       It means that the page are shared between skb and RX ring
 
 static bool igb_can_reuse_rx_page(struct igb_rx_buffer *rx_buffer)
 {
@@ -7992,6 +8164,7 @@ static bool igb_can_reuse_rx_page(struct igb_rx_buffer *rx_buffer)
  *
  *  This function will add the data contained in rx_buffer->page to the skb.
  **/
+// zhou: handover packet from "struct igb_rx_buffer" to "struct skb"
 static void igb_add_rx_frag(struct igb_ring *rx_ring,
 			    struct igb_rx_buffer *rx_buffer,
 			    struct sk_buff *skb,
@@ -8416,6 +8589,7 @@ static bool igb_alloc_mapped_page(struct igb_ring *rx_ring,
 	if (likely(page))
 		return true;
 
+    // zhou: get the page descriptor within ZONE_XXX
 	/* alloc new page for storage */
 	page = dev_alloc_pages(igb_rx_pg_order(rx_ring));
 	if (unlikely(!page)) {
@@ -8423,6 +8597,7 @@ static bool igb_alloc_mapped_page(struct igb_ring *rx_ring,
 		return false;
 	}
 
+    // zhou: get DMA address for the device access.
 	/* map page for use */
 	dma = dma_map_page_attrs(rx_ring->dev, page, 0,
 				 igb_rx_pg_size(rx_ring),
@@ -8447,6 +8622,8 @@ static bool igb_alloc_mapped_page(struct igb_ring *rx_ring,
 	return true;
 }
 
+// zhou: init/re-init several RX descriptors, then NIC's DMA can use it to
+//       receive new packets. Used when NIC opened/enabled, rx message handler.
 /**
  *  igb_alloc_rx_buffers - Replace used receive buffers; packet split
  *  @adapter: address of board private structure
@@ -8462,7 +8639,9 @@ void igb_alloc_rx_buffers(struct igb_ring *rx_ring, u16 cleaned_count)
 	if (!cleaned_count)
 		return;
 
+    // zhou: get element of the array of descriptors
 	rx_desc = IGB_RX_DESC(rx_ring, i);
+    // zhou: get element of the array of packet buffer.
 	bi = &rx_ring->rx_buffer_info[i];
 	i -= rx_ring->count;
 
@@ -8476,6 +8655,9 @@ void igb_alloc_rx_buffers(struct igb_ring *rx_ring, u16 cleaned_count)
 		dma_sync_single_range_for_device(rx_ring->dev, bi->dma,
 						 bi->page_offset, bufsz,
 						 DMA_FROM_DEVICE);
+
+        // zhou: we will put descriptor back to ring quickly. But in order to avoid
+        //       memory copy, the packet buffer will be kept by stack, and assign a new Page.
 
 		/* Refresh the desc even if buffer_addrs didn't change
 		 * because each write-back erases this info.
@@ -8742,6 +8924,8 @@ static int __igb_shutdown(struct pci_dev *pdev, bool *enable_wake,
 	bool wake;
 
 	rtnl_lock();
+
+    // zhou: remove __LINK_STATE_PRESENT from netdev->state, temporary or permanently shutdown.
 	netif_device_detach(netdev);
 
 	if (netif_running(netdev))
@@ -9388,6 +9572,7 @@ static void igb_vmm_control(struct igb_adapter *adapter)
 	}
 }
 
+// zhou: DMAC means DAM Controller which located in NIC
 static void igb_init_dmac(struct igb_adapter *adapter, u32 pba)
 {
 	struct e1000_hw *hw = &adapter->hw;

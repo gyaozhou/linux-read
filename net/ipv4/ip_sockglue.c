@@ -783,6 +783,7 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 		inet->pmtudisc = val;
 		break;
 	case IP_RECVERR:
+        // zhou: README, could get more error information from recvmsg() by enable this flag. e.g. ENOBUFS.
 		inet->recverr = !!val;
 		if (!val)
 			skb_queue_purge(&sk->sk_error_queue);
@@ -896,7 +897,9 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 		    (!midx || midx != sk->sk_bound_dev_if))
 			break;
 
+        // zhou: interface ID, decided by "dev" which s_addr located.
 		inet->mc_index = mreq.imr_ifindex;
+        // zhou: specified by APP
 		inet->mc_addr  = mreq.imr_address.s_addr;
 		err = 0;
 		break;

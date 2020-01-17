@@ -2895,6 +2895,8 @@ static s32 igb_init_thermal_sensor_thresh_generic(struct e1000_hw *hw)
 }
 
 #endif
+
+// zhou: these operations shared by whole igb dirver.
 static struct e1000_mac_operations e1000_mac_ops_82575 = {
 	.init_hw              = igb_init_hw_82575,
 	.check_for_link       = igb_check_for_link_82575,
@@ -2928,4 +2930,3 @@ const struct e1000_info e1000_82575_info = {
 	.phy_ops = &e1000_phy_ops_82575,
 	.nvm_ops = &e1000_nvm_ops_82575,
 };
-

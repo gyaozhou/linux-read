@@ -173,6 +173,9 @@ struct control_buf {
 	__virtio64 offloads;
 };
 
+// zhou: driver private data which append to "struct net_device". Such as "struct igb_adapter"
+//       each queue pair corresponding one virtnet_info.
+
 struct virtnet_info {
 	struct virtio_device *vdev;
 	struct virtqueue *cvq;
@@ -2295,6 +2298,7 @@ static void virtnet_update_settings(struct virtnet_info *vi)
 		vi->duplex = duplex;
 }
 
+// zhou:
 static const struct ethtool_ops virtnet_ethtool_ops = {
 	.get_drvinfo = virtnet_get_drvinfo,
 	.get_link = ethtool_op_get_link,
@@ -2982,6 +2986,7 @@ static int virtnet_validate(struct virtio_device *vdev)
 	return 0;
 }
 
+// zhou: core
 static int virtnet_probe(struct virtio_device *vdev)
 {
 	int i, err = -ENOMEM;
@@ -2989,6 +2994,8 @@ static int virtnet_probe(struct virtio_device *vdev)
 	struct virtnet_info *vi;
 	u16 max_queue_pairs;
 	int mtu;
+
+    // zhou: IO read Host configuration via PCI.
 
 	/* Find if host supports multiqueue virtio_net device */
 	err = virtio_cread_feature(vdev, VIRTIO_NET_F_MQ,
@@ -3001,11 +3008,13 @@ static int virtnet_probe(struct virtio_device *vdev)
 	    !virtio_has_feature(vdev, VIRTIO_NET_F_CTRL_VQ))
 		max_queue_pairs = 1;
 
+    // zhou: allocate both net_device and virtnet_info, specify the TX/RX Queue number.
 	/* Allocate ourselves a network device with room for our info */
 	dev = alloc_etherdev_mq(sizeof(struct virtnet_info), max_queue_pairs);
 	if (!dev)
 		return -ENOMEM;
 
+    // zhou: here just like standard NIC driver did.
 	/* Set up network device as normal. */
 	dev->priv_flags |= IFF_UNICAST_FLT | IFF_LIVE_ADDR_CHANGE;
 	dev->netdev_ops = &virtnet_netdev;
@@ -3053,6 +3062,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 	dev->min_mtu = MIN_MTU;
 	dev->max_mtu = MAX_MTU;
 
+    // zhou: IO read MAC address if supported by Host.
 	/* Configuration may specify what MAC to use.  Otherwise random. */
 	if (virtio_has_feature(vdev, VIRTIO_NET_F_MAC))
 		virtio_cread_bytes(vdev,
@@ -3061,6 +3071,9 @@ static int virtnet_probe(struct virtio_device *vdev)
 	else
 		eth_hw_addr_random(dev);
 
+    // zhou: virtio net private infomation initilization.
+
+    // zhou: get private data "struct virtnet_info" following "struct net_device"
 	/* Set up our device-specific information */
 	vi = netdev_priv(dev);
 	vi->dev = dev;
@@ -3146,6 +3159,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 		}
 	}
 
+    // zhou: register as a new network device
 	err = register_netdev(dev);
 	if (err) {
 		pr_debug("virtio_net: registering device failed\n");
@@ -3168,6 +3182,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 	if (virtio_has_feature(vi->vdev, VIRTIO_NET_F_STATUS)) {
 		schedule_work(&vi->config_work);
 	} else {
+        // zhou: we have to asume Link UP always in case of no this feature.
 		vi->status = VIRTIO_NET_S_LINK_UP;
 		virtnet_update_settings(vi);
 		netif_carrier_on(dev);
@@ -3258,11 +3273,13 @@ static __maybe_unused int virtnet_restore(struct virtio_device *vdev)
 	return 0;
 }
 
+// zhou: ID table used describe which virtio device this driver could operate.
 static struct virtio_device_id id_table[] = {
 	{ VIRTIO_ID_NET, VIRTIO_DEV_ANY_ID },
 	{ 0 },
 };
 
+// zhou: virtio net driver supported feature, which will be detected by Qemu?
 #define VIRTNET_FEATURES \
 	VIRTIO_NET_F_CSUM, VIRTIO_NET_F_GUEST_CSUM, \
 	VIRTIO_NET_F_MAC, \
@@ -3286,15 +3303,22 @@ static unsigned int features_legacy[] = {
 	VIRTIO_F_ANY_LAYOUT,
 };
 
+// zhou: virtio bus will go through all registered virtio device driver when found a
+//       a new virtio device.
 static struct virtio_driver virtio_net_driver = {
 	.feature_table = features,
 	.feature_table_size = ARRAY_SIZE(features),
+
+    // zhou: this name is defined by kbuild and pased to module via "-DKBUILD_MODNAME=xxx"
+    //       it should be "virtio_net" in this case.
+
 	.feature_table_legacy = features_legacy,
 	.feature_table_size_legacy = ARRAY_SIZE(features_legacy),
 	.driver.name =	KBUILD_MODNAME,
 	.driver.owner =	THIS_MODULE,
 	.id_table =	id_table,
 	.validate =	virtnet_validate,
+    // zhou:
 	.probe =	virtnet_probe,
 	.remove =	virtnet_remove,
 	.config_changed = virtnet_config_changed,
@@ -3319,7 +3343,11 @@ static __init int virtio_net_driver_init(void)
 	if (ret)
 		goto err_dead;
 
-        ret = register_virtio_driver(&virtio_net_driver);
+    // zhou: register as a network device in virtnet_probe()->register_netdev().
+    //       Here only register a driver to virtio bus, told virtio bus that once
+    //       there is new virtio device detected by virtio bus, try this driver's
+    //       probe function also.
+    ret = register_virtio_driver(&virtio_net_driver);
 	if (ret)
 		goto err_virtio;
 	return 0;

@@ -4703,6 +4703,7 @@ static void ixgbe_restore_vlan(struct ixgbe_adapter *adapter)
  *                0 on no addresses written
  *                X on writing X addresses to MTA
  **/
+// zhou: README,
 static int ixgbe_write_mc_addr_list(struct net_device *netdev)
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
@@ -4907,6 +4908,7 @@ static int ixgbe_uc_unsync(struct net_device *netdev, const unsigned char *addr)
  * responsible for configuring the hardware for proper unicast, multicast and
  * promiscuous mode.
  **/
+// zhou: README,
 void ixgbe_set_rx_mode(struct net_device *netdev)
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);

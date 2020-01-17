@@ -1248,6 +1248,9 @@ void __set_task_comm(struct task_struct *tsk, const char *buf, bool exec)
 	perf_event_comm(tsk, exec);
 }
 
+// zhou: invoked by ELF/AOUT/xxx, load_elf_binary(), then invoked by search_binary_handler().
+//       This is the most important function in system call exec(), close something.
+
 /*
  * Calling this is the point of no return. None of the failures will be
  * seen by userspace since either the process is already taking a fatal
@@ -1330,6 +1333,7 @@ void would_dump(struct linux_binprm *bprm, struct file *file)
 }
 EXPORT_SYMBOL(would_dump);
 
+// zhou: invoked by load_elf_binary()
 void setup_new_exec(struct linux_binprm * bprm)
 {
 	/*
@@ -1698,6 +1702,7 @@ static int exec_binprm(struct linux_binprm *bprm)
 	old_vpid = task_pid_nr_ns(current, task_active_pid_ns(current->parent));
 	rcu_read_unlock();
 
+    // zhou: make sure the excutable file format is recoginazed.
 	ret = search_binary_handler(bprm);
 	if (ret >= 0) {
 		audit_bprm(bprm);
@@ -1708,6 +1713,8 @@ static int exec_binprm(struct linux_binprm *bprm)
 
 	return ret;
 }
+
+// zhou: implementation of "SYSCALL_DEFINE3(execve, ...)"
 
 /*
  * sys_execve() executes a new program.
@@ -1952,6 +1959,7 @@ void set_dumpable(struct mm_struct *mm, int value)
 	set_mask_bits(&mm->flags, MMF_DUMPABLE_MASK, value);
 }
 
+// zhou: system call, execve()
 SYSCALL_DEFINE3(execve,
 		const char __user *, filename,
 		const char __user *const __user *, argv,

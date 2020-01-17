@@ -553,7 +553,7 @@ static inline __wsum inet_gro_compute_pseudo(struct sk_buff *skb, int proto)
 /*
  *	Map a multicast IP onto multicast MAC for type ethernet.
  */
-
+// zhou: convert Mulitcast IP to Ethernet Multicast MAC address.
 static inline void ip_eth_mc_map(__be32 naddr, char *buf)
 {
 	__u32 addr=ntohl(naddr);

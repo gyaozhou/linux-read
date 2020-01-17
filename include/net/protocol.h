@@ -16,7 +16,7 @@
  *		Alan Cox	:	Cleaned up, and sorted types.
  *		Pedro Roque	:	inet6 protocols
  */
- 
+
 #ifndef _PROTOCOL_H
 #define _PROTOCOL_H
 
@@ -77,6 +77,7 @@ struct net_offload {
 /* This should be set for any extension header which is compatible with GSO. */
 #define INET6_PROTO_GSO_EXTHDR	0x1
 
+// zhou: it's used to present SOCK_xxx and protocol within PF_XXX,
 /* This is used to register socket interfaces for IP protocols.  */
 struct inet_protosw {
 	struct list_head list;
@@ -85,9 +86,10 @@ struct inet_protosw {
 	unsigned short	 type;	   /* This is the 2nd argument to socket(2). */
 	unsigned short	 protocol; /* This is the L4 protocol number.  */
 
+    // zhou: interface for socket layer and transport layer
 	struct proto	 *prot;
 	const struct proto_ops *ops;
-  
+
 	unsigned char	 flags;      /* See INET_PROTOSW_* below.  */
 };
 #define INET_PROTOSW_REUSE 0x01	     /* Are ports automatically reusable? */

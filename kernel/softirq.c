@@ -52,6 +52,7 @@ DEFINE_PER_CPU_ALIGNED(irq_cpustat_t, irq_stat);
 EXPORT_PER_CPU_SYMBOL(irq_stat);
 #endif
 
+// zhou: vector for softirq
 static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;
 
 DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
@@ -246,6 +247,7 @@ static inline bool lockdep_softirq_start(void) { return false; }
 static inline void lockdep_softirq_end(bool in_hardirq) { }
 #endif
 
+// zhou: there are a lot of places to schedule the running of softirq!!!
 asmlinkage __visible void __softirq_entry __do_softirq(void)
 {
 	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
@@ -307,6 +309,10 @@ restart:
 
 	pending = local_softirq_pending();
 	if (pending) {
+
+        // zhou: we judege the timeframe we have used and other flag to decide whether
+        //       we need to give up CPU.
+
 		if (time_before(jiffies, end) && !need_resched() &&
 		    --max_restart)
 			goto restart;
@@ -460,6 +466,7 @@ void open_softirq(int nr, void (*action)(struct softirq_action *))
 /*
  * Tasklets
  */
+// zhou: tasklet is just a list, link all kinds dynamic defined task.
 struct tasklet_head {
 	struct tasklet_struct *head;
 	struct tasklet_struct **tail;
@@ -536,6 +543,7 @@ static void tasklet_action_common(struct softirq_action *a,
 	}
 }
 
+// zhou: in order to protect PER_CPU variable "tasklet_vec", disable irq temporary.
 static __latent_entropy void tasklet_action(struct softirq_action *a)
 {
 	tasklet_action_common(a, this_cpu_ptr(&tasklet_vec), TASKLET_SOFTIRQ);
@@ -674,6 +682,7 @@ static struct smp_hotplug_thread softirq_threads = {
 	.store			= &ksoftirqd,
 	.thread_should_run	= ksoftirqd_should_run,
 	.thread_fn		= run_ksoftirqd,
+    // zhou: command name for this kind kernel thread
 	.thread_comm		= "ksoftirqd/%u",
 };
 

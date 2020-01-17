@@ -260,6 +260,7 @@ static int e1000_request_irq(struct e1000_adapter *adapter)
 	int irq_flags = IRQF_SHARED;
 	int err;
 
+    // zhou: setup interrupt handler
 	err = request_irq(adapter->pdev->irq, handler, irq_flags, netdev->name,
 			  netdev);
 	if (err) {
@@ -385,6 +386,7 @@ static void e1000_configure(struct e1000_adapter *adapter)
 	}
 }
 
+// zhou: alloc each skb here.
 int e1000_up(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
@@ -826,6 +828,7 @@ static int e1000_set_features(struct net_device *netdev,
 static const struct net_device_ops e1000_netdev_ops = {
 	.ndo_open		= e1000_open,
 	.ndo_stop		= e1000_close,
+    // zhou: for upper layer sending packets
 	.ndo_start_xmit		= e1000_xmit_frame,
 	.ndo_set_rx_mode	= e1000_set_rx_mode,
 	.ndo_set_mac_address	= e1000_set_mac,
@@ -906,6 +909,8 @@ static int e1000_init_hw_struct(struct e1000_adapter *adapter,
 	return 0;
 }
 
+
+// zhou: entry of init
 /**
  * e1000_probe - Device Initialization Routine
  * @pdev: PCI device information struct
@@ -932,6 +937,10 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	int bars, need_ioport;
 	bool disable_dev = false;
 
+////////////////////////////////////////////////////////////////////////////////
+    // zhou: PCI device init.
+    //       Refer to "Dynamic DMA mapping" and "pci"
+
 	/* do not allocate ioport bars when not needed */
 	need_ioport = e1000_is_need_ioport(pdev);
 	if (need_ioport) {
@@ -953,6 +962,9 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (err)
 		goto err_alloc_etherdev;
 
+////////////////////////////////////////////////////////////////////////////////
+    // zhou: setup net_device with private data.
+
 	err = -ENOMEM;
 	netdev = alloc_etherdev(sizeof(struct e1000_adapter));
 	if (!netdev)
@@ -960,6 +972,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 
+    // zhou: connect "pci_dev", "net_device", "e1000_adapter" together
 	pci_set_drvdata(pdev, netdev);
 	adapter = netdev_priv(netdev);
 	adapter->netdev = netdev;
@@ -976,6 +989,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (!hw->hw_addr)
 		goto err_ioremap;
 
+    // zhou: kernel have filled "pci_dev" with NIC low level hardware information
 	if (adapter->need_ioport) {
 		for (i = BAR_1; i < PCI_STD_NUM_BARS; i++) {
 			if (pci_resource_len(pdev, i) == 0)
@@ -1017,11 +1031,15 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	adapter->bd_number = cards_found;
 
+    // zhou: prepare some internal inforamtion.
 	/* setup the private structure */
 
 	err = e1000_sw_init(adapter);
 	if (err)
 		goto err_sw_init;
+
+    // zhou: Remap an arbitrary physical address space into the kernel
+    //       virtual address space.
 
 	err = -EIO;
 	if (hw->mac_type == e1000_ce4100) {
@@ -1114,6 +1132,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	INIT_DELAYED_WORK(&adapter->phy_info_task, e1000_update_phy_info_task);
 	INIT_WORK(&adapter->reset_task, e1000_reset_task);
 
+    // zhou: set paramters depend on module parameters and defaults
 	e1000_check_options(adapter);
 
 	/* Initial Wake on LAN setting
@@ -1294,6 +1313,7 @@ static void e1000_remove(struct pci_dev *pdev)
  **/
 static int e1000_sw_init(struct e1000_adapter *adapter)
 {
+    // zhou: the size of pre-alloc for skbxo
 	adapter->rx_buffer_len = MAXIMUM_ETHERNET_VLAN_SIZE;
 
 	adapter->num_tx_queues = 1;
@@ -1328,6 +1348,7 @@ static int e1000_alloc_queues(struct e1000_adapter *adapter)
 	if (!adapter->tx_ring)
 		return -ENOMEM;
 
+    // zhou: we have one tx ring
 	adapter->rx_ring = kcalloc(adapter->num_rx_queues,
 				   sizeof(struct e1000_rx_ring), GFP_KERNEL);
 	if (!adapter->rx_ring) {
@@ -1338,6 +1359,7 @@ static int e1000_alloc_queues(struct e1000_adapter *adapter)
 	return E1000_SUCCESS;
 }
 
+// zhou: enable NIC
 /**
  * e1000_open - Called when a network interface is made active
  * @netdev: network interface device structure
@@ -1416,6 +1438,7 @@ err_setup_tx:
 	return err;
 }
 
+// zhou: disable NIC
 /**
  * e1000_close - Disables a network interface
  * @netdev: network interface device structure
@@ -2182,6 +2205,7 @@ static void e1000_leave_82542_rst(struct e1000_adapter *adapter)
 	}
 }
 
+// zhou: update "Receive Address Register"
 /**
  * e1000_set_mac - Change the Ethernet Address of the NIC
  * @netdev: network interface device structure
@@ -2206,6 +2230,7 @@ static int e1000_set_mac(struct net_device *netdev, void *p)
 	memcpy(netdev->dev_addr, addr->sa_data, netdev->addr_len);
 	memcpy(hw->mac_addr, addr->sa_data, netdev->addr_len);
 
+    // zhou: update "Receive Address Register"
 	e1000_rar_set(hw, hw->mac_addr, 0);
 
 	if (hw->mac_type == e1000_82542_rev2_0)
@@ -3733,6 +3758,8 @@ void e1000_update_stats(struct e1000_adapter *adapter)
 	spin_unlock_irqrestore(&adapter->stats_lock, flags);
 }
 
+
+// zhou: handle new interrupt, new packets have been put in system memory.
 /**
  * e1000_intr - Interrupt Handler
  * @irq: interrupt number
@@ -4543,6 +4570,7 @@ e1000_alloc_jumbo_rx_buffers(struct e1000_adapter *adapter,
 	}
 }
 
+// zhou: invoked when NIC UP,
 /**
  * e1000_alloc_rx_buffers - Replace used receive buffers; legacy & extended
  * @adapter: address of board private structure
@@ -4635,6 +4663,7 @@ static void e1000_alloc_rx_buffers(struct e1000_adapter *adapter,
 		}
 		buffer_info->rxbuf.data = data;
  skip:
+        // zhou: set buffer descriptor pointer
 		rx_desc = E1000_RX_DESC(*rx_ring, i);
 		rx_desc->buffer_addr = cpu_to_le64(buffer_info->dma);
 

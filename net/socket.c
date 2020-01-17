@@ -140,6 +140,7 @@ static const struct file_operations socket_file_ops = {
 	.read_iter =	sock_read_iter,
 	.write_iter =	sock_write_iter,
 	.poll =		sock_poll,
+// zhou: will be used in ioctl()
 	.unlocked_ioctl = sock_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = compat_sock_ioctl,
@@ -156,6 +157,7 @@ static const struct file_operations socket_file_ops = {
  *	The protocol list. Each protocol is registered in here.
  */
 
+// zhou: Protocol Family vector
 static DEFINE_SPINLOCK(net_family_lock);
 static const struct net_proto_family __rcu *net_families[NPROTO] __read_mostly;
 
@@ -478,6 +480,7 @@ struct socket *sockfd_lookup(int fd, int *err)
 }
 EXPORT_SYMBOL(sockfd_lookup);
 
+// zhou:verify the fd, and find the corresponding "socket"
 static struct socket *sockfd_lookup_light(int fd, int *err, int *fput_needed)
 {
 	struct fd f = fdget(fd);
@@ -551,16 +554,19 @@ static const struct inode_operations sockfs_inode_ops = {
  *	and initialised. The socket is then returned. If we are out of inodes
  *	NULL is returned. This functions uses GFP_KERNEL internally.
  */
-
+// zhou: "struct socket_alloc" is the connect between fd operations and Network protocol handling!!!
 struct socket *sock_alloc(void)
 {
 	struct inode *inode;
 	struct socket *sock;
 
+    // zhou: each opened socket, will be a corresponding "inode"
 	inode = new_inode_pseudo(sock_mnt->mnt_sb);
 	if (!inode)
 		return NULL;
 
+    // zhou: "struct socket" and "struct inode" are co-located within
+    //       "struct socket_alloc"
 	sock = SOCKET_I(inode);
 
 	inode->i_ino = get_next_ino();
@@ -1346,6 +1352,7 @@ EXPORT_SYMBOL(sock_wake_async);
  *	This function internally uses GFP_KERNEL.
  */
 
+// zhou: socket can also be created by kernel.
 int __sock_create(struct net *net, int family, int type, int protocol,
 			 struct socket **res, int kern)
 {
@@ -1388,6 +1395,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 				   closest posix thing */
 	}
 
+    // zhou: SOCK_XXX
 	sock->type = type;
 
 #ifdef CONFIG_MODULES
@@ -1514,9 +1522,16 @@ int __sys_socket(int family, int type, int protocol)
 	if (retval < 0)
 		return retval;
 
+    // zhou: return fd which user care about
 	return sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK));
 }
 
+/********************************************************************************
+ *
+ *                          System APIs
+ *
+ ********************************************************************************/
+// zhou: system call, socket()
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 {
 	return __sys_socket(family, type, protocol);
@@ -1645,6 +1660,8 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 			err = security_socket_bind(sock,
 						   (struct sockaddr *)&address,
 						   addrlen);
+
+            // zhou: "inet_bind()/inet6_bind()"
 			if (!err)
 				err = sock->ops->bind(sock,
 						      (struct sockaddr *)
@@ -1655,6 +1672,7 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 	return err;
 }
 
+// zhou: bind()
 SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 {
 	return __sys_bind(fd, umyaddr, addrlen);
@@ -1687,11 +1705,13 @@ int __sys_listen(int fd, int backlog)
 	return err;
 }
 
+// zhou: listen()
 SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 {
 	return __sys_listen(fd, backlog);
 }
 
+// zhou: accept()
 int __sys_accept4_file(struct file *file, unsigned file_flags,
 		       struct sockaddr __user *upeer_sockaddr,
 		       int __user *upeer_addrlen, int flags)
@@ -1712,6 +1732,8 @@ int __sys_accept4_file(struct file *file, unsigned file_flags,
 		goto out;
 
 	err = -ENFILE;
+
+    // zhou: we will also create socket in accept
 	newsock = sock_alloc();
 	if (!newsock)
 		goto out;
@@ -2826,7 +2848,7 @@ static const unsigned char nargs[21] = {
  *  This function doesn't need to set the kernel lock because
  *  it is set by the callees.
  */
-
+// zhou:
 SYSCALL_DEFINE2(socketcall, int, call, unsigned long __user *, args)
 {
 	unsigned long a[AUDITSC_ARGS];
@@ -2957,6 +2979,10 @@ SYSCALL_DEFINE2(socketcall, int, call, unsigned long __user *, args)
  *	socket interface. The value ops->family corresponds to the
  *	socket system call protocol family.
  */
+
+// zhou: KEY, register protocol family to kernel, such as PF_INET, PF_RING...
+//       Unlike "proto_register()", this function do some actual work.
+//       VFS(file), INET(socket), Network(sock).
 int sock_register(const struct net_proto_family *ops)
 {
 	int err;
@@ -2971,6 +2997,7 @@ int sock_register(const struct net_proto_family *ops)
 				      lockdep_is_held(&net_family_lock)))
 		err = -EEXIST;
 	else {
+        // zhou: put "ops" in "net_families[PF_XXX]"
 		rcu_assign_pointer(net_families[ops->family], ops);
 		err = 0;
 	}
@@ -3013,6 +3040,7 @@ bool sock_is_registered(int family)
 	return family < NPROTO && rcu_access_pointer(net_families[family]);
 }
 
+// zhou: entry point for file system(sockfs) initialization
 static int __init sock_init(void)
 {
 	int err;

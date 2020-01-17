@@ -1690,6 +1690,9 @@ static inline struct bio_vec *rq_integrity_vec(struct request *rq)
 
 #endif /* CONFIG_BLK_DEV_INTEGRITY */
 
+// zhou: README, unlike "struct file_operations", the block device will not handle
+//       read/write directly. In the block I/O subsystem, these operations are
+//       handled by the request function.
 struct block_device_operations {
 	int (*open) (struct block_device *, fmode_t);
 	void (*release) (struct gendisk *, fmode_t);

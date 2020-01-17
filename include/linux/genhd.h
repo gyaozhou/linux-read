@@ -4,7 +4,7 @@
 
 /*
  * 	genhd.h Copyright (C) 1992 Drew Eckhardt
- *	Generic hard disk header file by  
+ *	Generic hard disk header file by
  * 		Drew Eckhardt
  *
  *		<drew@colorado.edu>
@@ -179,6 +179,8 @@ struct blk_integrity {
 
 #endif	/* CONFIG_BLK_DEV_INTEGRITY */
 
+// zhou: used to represent a disk device, disk partition will be represented by
+//       "struct hd_struct".
 struct gendisk {
 	/* major, first_minor and minors are input parameters only,
 	 * don't use directly.  Use disk_devt() and disk_max_parts().
@@ -188,7 +190,9 @@ struct gendisk {
 	int minors;                     /* maximum number of minors, =1 for
                                          * disks that can't be partitioned. */
 
+    // zhou: "/proc/partitions", the disk name such as "sda", "sda1".
 	char disk_name[DISK_NAME_LEN];	/* name of major driver */
+
 	char *(*devnode)(struct gendisk *gd, umode_t *mode);
 
 	unsigned short events;		/* supported events */
@@ -424,6 +428,7 @@ void update_io_ticks(struct hd_struct *part, unsigned long now);
 /* block/genhd.c */
 extern void device_add_disk(struct device *parent, struct gendisk *disk,
 			    const struct attribute_group **groups);
+// zhou: add a partion (struct hd_struct) to disk (struct gendisk).
 static inline void add_disk(struct gendisk *disk)
 {
 	device_add_disk(NULL, disk, NULL);
@@ -513,7 +518,7 @@ struct bsd_disklabel {
 	__s16	d_type;			/* drive type */
 	__s16	d_subtype;		/* controller/d_type specific */
 	char	d_typename[16];		/* type name, e.g. "eagle" */
-	char	d_packname[16];			/* pack identifier */ 
+	char	d_packname[16];			/* pack identifier */
 	__u32	d_secsize;		/* # of bytes per sector */
 	__u32	d_nsectors;		/* # of data sectors per track */
 	__u32	d_ntracks;		/* # of tracks per cylinder */
@@ -675,6 +680,7 @@ extern ssize_t part_fail_store(struct device *dev,
 	__disk;								\
 })
 
+// zhou: used when detect a new device, represent a whole disk.
 #define alloc_disk(minors) alloc_disk_node(minors, NUMA_NO_NODE)
 
 static inline int hd_ref_init(struct hd_struct *part)

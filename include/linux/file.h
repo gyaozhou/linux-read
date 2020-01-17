@@ -30,7 +30,7 @@ static inline void fput_light(struct file *file, int fput_needed)
 	if (fput_needed)
 		fput(file);
 }
-
+// zhou: wrapper of "struct file"
 struct fd {
 	struct file *file;
 	unsigned int flags;

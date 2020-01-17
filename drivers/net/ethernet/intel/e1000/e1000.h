@@ -123,6 +123,7 @@ struct e1000_adapter;
  */
 struct e1000_tx_buffer {
 	struct sk_buff *skb;
+    // zhou: pointer to memory of "skb" in DMA address
 	dma_addr_t dma;
 	unsigned long time_stamp;
 	u16 length;
@@ -153,6 +154,8 @@ struct e1000_tx_ring {
 	unsigned int next_to_use;
 	/* next descriptor to check for DD status bit */
 	unsigned int next_to_clean;
+
+    // zhou: ring buffer
 	/* array of buffer information structs */
 	struct e1000_tx_buffer *buffer_info;
 
@@ -161,6 +164,7 @@ struct e1000_tx_ring {
 	bool last_tx_tso;
 };
 
+// zhou: each queue correspond to one e1000_xx_ring
 struct e1000_rx_ring {
 	/* pointer to the descriptor ring memory */
 	void *desc;
@@ -174,6 +178,8 @@ struct e1000_rx_ring {
 	unsigned int next_to_use;
 	/* next descriptor to check for DD status bit */
 	unsigned int next_to_clean;
+
+    // zhou: pay attention, just for "descriptor ring", not the skb itself
 	/* array of buffer information structs */
 	struct e1000_rx_buffer *buffer_info;
 	struct sk_buff *rx_skb_top;

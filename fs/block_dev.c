@@ -84,7 +84,7 @@ void kill_bdev(struct block_device *bdev)
 
 	invalidate_bh_lrus();
 	truncate_inode_pages(mapping, 0);
-}	
+}
 EXPORT_SYMBOL(kill_bdev);
 
 /* Invalidate clean unused buffers and pagecache. */
@@ -656,13 +656,13 @@ static loff_t block_llseek(struct file *file, loff_t offset, int whence)
 	inode_unlock(bd_inode);
 	return retval;
 }
-	
+
 int blkdev_fsync(struct file *filp, loff_t start, loff_t end, int datasync)
 {
 	struct inode *bd_inode = bdev_file_inode(filp);
 	struct block_device *bdev = I_BDEV(bd_inode);
 	int error;
-	
+
 	error = file_write_and_wait_range(filp, start, end);
 	if (error)
 		return error;
@@ -961,7 +961,7 @@ void bdput(struct block_device *bdev)
 }
 
 EXPORT_SYMBOL(bdput);
- 
+
 static struct block_device *bd_acquire(struct inode *inode)
 {
 	struct block_device *bdev;
@@ -2036,6 +2036,7 @@ ssize_t blkdev_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	size -= pos;
 	iov_iter_truncate(to, size);
+
 	return generic_file_read_iter(iocb, to);
 }
 EXPORT_SYMBOL_GPL(blkdev_read_iter);
@@ -2142,6 +2143,10 @@ static long blkdev_fallocate(struct file *file, int mode, loff_t start,
 					     end >> PAGE_SHIFT);
 }
 
+// zhou: used for Raw Block Device.
+//       In case of char device, we always open /dev/xxx, and read/write like a file via "def_chr_fops".
+//       But for block device, which required read/write a sector for each time.
+//       So, by this way, Raw Device simulates the behavior of char device !!!
 const struct file_operations def_blk_fops = {
 	.open		= blkdev_open,
 	.release	= blkdev_close,

@@ -141,6 +141,7 @@ static inline void bio_issue_init(struct bio_issue *issue,
  * main unit of I/O for the block layer and lower layers (ie drivers and
  * stacking drivers)
  */
+// zhou:
 struct bio {
 	struct bio		*bi_next;	/* request queue link */
 	struct gendisk		*bi_disk;

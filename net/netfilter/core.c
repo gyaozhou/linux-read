@@ -500,6 +500,8 @@ void nf_unregister_net_hooks(struct net *net, const struct nf_hook_ops *reg,
 }
 EXPORT_SYMBOL(nf_unregister_net_hooks);
 
+// zhou: walk through all the hook function
+
 /* Returns 1 if okfn() needs to be executed by the caller,
  * -EPERM for NF_DROP, 0 otherwise.  Caller must hold rcu_read_lock. */
 int nf_hook_slow(struct sk_buff *skb, struct nf_hook_state *state,

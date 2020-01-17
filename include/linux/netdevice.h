@@ -229,6 +229,7 @@ struct netdev_hw_addr_list {
 #define netdev_for_each_uc_addr(ha, dev) \
 	netdev_hw_addr_list_for_each(ha, &(dev)->uc)
 
+// zhou:
 #define netdev_mc_count(dev) netdev_hw_addr_list_count(&(dev)->mc)
 #define netdev_mc_empty(dev) netdev_hw_addr_list_empty(&(dev)->mc)
 #define netdev_for_each_mc_addr(ha, dev) \
@@ -279,7 +280,9 @@ struct header_ops {
  */
 
 enum netdev_state_t {
+// zhou: user disable or enable
 	__LINK_STATE_START,
+// zhou: suspend, resume by power management
 	__LINK_STATE_PRESENT,
 	__LINK_STATE_NOCARRIER,
 	__LINK_STATE_LINKWATCH_PENDING,
@@ -320,6 +323,7 @@ struct napi_struct {
 	 * to the per-CPU poll_list, and whoever clears that bit
 	 * can remove from the list right before clearing the bit.
 	 */
+    // zhou: this is not a list head, just a member of "softnet_data.poll_list"
 	struct list_head	poll_list;
 
 	unsigned long		state;
@@ -335,6 +339,8 @@ struct napi_struct {
 	struct list_head	rx_list; /* Pending GRO_NORMAL skbs */
 	int			rx_count; /* length of rx_list */
 	struct hrtimer		timer;
+
+    // zhou: will be member of "net_device.net_device"
 	struct list_head	dev_list;
 	struct hlist_node	napi_hash_node;
 	unsigned int		napi_id;
@@ -1254,6 +1260,8 @@ int netdev_name_node_alt_destroy(struct net_device *dev, const char *name);
  *	Called with a reference on the netdevice and devlink locks only,
  *	rtnl_lock is not held.
  */
+
+// zhou: operate network device
 struct net_device_ops {
 	int			(*ndo_init)(struct net_device *dev);
 	void			(*ndo_uninit)(struct net_device *dev);
@@ -1791,8 +1799,9 @@ enum netdev_priv_flags {
  *	FIXME: cleanup struct net_device such that network protocol info
  *	moves out.
  */
-
+// zhou: core data for network device.
 struct net_device {
+    // zhou: naming rule
 	char			name[IFNAMSIZ];
 	struct netdev_name_node	*name_node;
 	struct dev_ifalias	__rcu *ifalias;
@@ -1810,10 +1819,11 @@ struct net_device {
 	 *	napi_list,unreg_list,close_list) but they are not
 	 *	part of the usual set specified in Space.c.
 	 */
-
+    // zhou: such as __LINK_STATE_START, __LINK_STATE_NOCARRIER, ...
 	unsigned long		state;
 
 	struct list_head	dev_list;
+    // zhou: only be used by Netpoll.
 	struct list_head	napi_list;
 	struct list_head	unreg_list;
 	struct list_head	close_list;
@@ -1850,7 +1860,10 @@ struct net_device {
 	const struct iw_handler_def *wireless_handlers;
 	struct iw_public_data	*wireless_data;
 #endif
+
+    // zhou: open, stop, ioctl, ...
 	const struct net_device_ops *netdev_ops;
+    // zhou: hardware specific ops, ...
 	const struct ethtool_ops *ethtool_ops;
 #ifdef CONFIG_NET_L3_MASTER_DEV
 	const struct l3mdev_ops	*l3mdev_ops;
@@ -1866,10 +1879,12 @@ struct net_device {
 #if IS_ENABLED(CONFIG_TLS_DEVICE)
 	const struct tlsdev_ops *tlsdev_ops;
 #endif
-
+    // zhou:
 	const struct header_ops *header_ops;
 
+    // zhou: IFF_UP, ...
 	unsigned int		flags;
+    // zhou: IFF_BONDING, ...
 	unsigned int		priv_flags;
 
 	unsigned short		gflags;
@@ -1909,6 +1924,7 @@ struct net_device {
 	unsigned char		name_assign_type;
 	bool			uc_promisc;
 	struct netdev_hw_addr_list	uc;
+    // zhou: list of
 	struct netdev_hw_addr_list	mc;
 	struct netdev_hw_addr_list	dev_addrs;
 
@@ -2476,6 +2492,7 @@ struct netdev_lag_lower_state_info {
  * adding new types.
  */
 enum netdev_cmd {
+    // zhou: network device event type
 	NETDEV_UP	= 1,	/* For now you can't veto a device up/down */
 	NETDEV_DOWN,
 	NETDEV_REBOOT,		/* Tell a protocol stack a network interface
@@ -3008,6 +3025,7 @@ extern int netdev_flow_limit_table_len;
 /*
  * Incoming packets are placed on per-CPU queues
  */
+// zhou: PER_CPU variable, for NAPI
 struct softnet_data {
 	struct list_head	poll_list;
 	struct sk_buff_head	process_queue;
@@ -4225,6 +4243,7 @@ void dev_mc_init(struct net_device *dev);
  *  Add newly added addresses to the interface, and release
  *  addresses that have been deleted.
  */
+// zhou: README,
 static inline int __dev_mc_sync(struct net_device *dev,
 				int (*sync)(struct net_device *,
 					    const unsigned char *),
@@ -4439,6 +4458,7 @@ int __init dev_proc_init(void);
 #define dev_proc_init() 0
 #endif
 
+// zhou: invoke driver's transmit callback function.
 static inline netdev_tx_t __netdev_start_xmit(const struct net_device_ops *ops,
 					      struct sk_buff *skb, struct net_device *dev,
 					      bool more)
@@ -4459,6 +4479,8 @@ static inline netdev_tx_t netdev_start_xmit(struct sk_buff *skb, struct net_devi
 	netdev_tx_t rc;
 
 	rc = __netdev_start_xmit(ops, skb, dev, more);
+
+    // zhou: no error happend in driver, in case of no buffer, no desc, no link ...
 	if (rc == NETDEV_TX_OK)
 		txq_trans_update(txq);
 

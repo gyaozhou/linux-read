@@ -3834,6 +3834,7 @@ static u16 tcp_parse_mss_option(const struct tcphdr *th, u16 user_mss)
  * But, this can also be called on packets in the established flow when
  * the fast version below fails.
  */
+// zhou: the opot_rx is the options we are using, we need to compare new vaule with old
 void tcp_parse_options(const struct net *net,
 		       const struct sk_buff *skb,
 		       struct tcp_options_received *opt_rx, int estab,
@@ -5544,6 +5545,7 @@ discard:
  *	the rest is checked inline. Fast processing is turned on in
  *	tcp_data_queue when everything is OK.
  */
+// zhou: handle payload
 void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 {
 	const struct tcphdr *th = (const struct tcphdr *)skb->data;
@@ -5868,6 +5870,7 @@ static void tcp_try_undo_spurious_syn(struct sock *sk)
 		tp->undo_marker = 0;
 }
 
+// zhou: handle SYN-ACK
 static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 					 const struct tcphdr *th)
 {
@@ -6128,7 +6131,7 @@ static void tcp_rcv_synrecv_state_fastopen(struct sock *sk)
  *	It's called from both tcp_v4_rcv and tcp_v6_rcv and should be
  *	address independent.
  */
-
+// zhou: receive packet triggered state change
 int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -6228,6 +6231,10 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			WRITE_ONCE(tp->copied_seq, tp->rcv_nxt);
 		}
 		smp_mb();
+
+        // zhou: NOTICE, there is no need for a queue for client to buffer established.
+        //       Just change the SOCK state as "TCP_ESTABLISHED". Unlike server, we have
+        //       to wait for application to accept().
 		tcp_set_state(sk, TCP_ESTABLISHED);
 		sk->sk_state_change(sk);
 

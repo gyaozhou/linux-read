@@ -181,6 +181,8 @@ struct neigh_table arp_tbl = {
 };
 EXPORT_SYMBOL(arp_tbl);
 
+// zhou: according to different L2 type, convert Mulitcast IP to L2 Multicast Address.
+//       For Ethernet, MAC will be used.
 int arp_mc_map(__be32 addr, u8 *haddr, struct net_device *dev, int dir)
 {
 	switch (dev->type) {
@@ -327,6 +329,7 @@ void arp_send(int type, int ptype, __be32 dest_ip,
 }
 EXPORT_SYMBOL(arp_send);
 
+// zhou: send ARP Request
 static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 {
 	__be32 saddr = 0;
@@ -386,6 +389,7 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 
 	if (skb && !(dev->priv_flags & IFF_XMIT_DST_RELEASE))
 		dst = skb_dst(skb);
+
 	arp_send_dst(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
 		     dst_hw, dev->dev_addr, NULL, dst);
 }
@@ -671,7 +675,7 @@ static bool arp_is_garp(struct net *net, struct net_device *dev,
 /*
  *	Process an arp request.
  */
-
+// zhou: handle a received ARP Request.
 static int arp_process(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;

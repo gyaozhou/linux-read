@@ -1327,6 +1327,7 @@ static void igmp_group_added(struct ip_mc_list *im)
 
 	if (im->loaded == 0) {
 		im->loaded = 1;
+        // zhou:
 		ip_mc_filter_add(in_dev, im->multiaddr);
 	}
 
@@ -2153,9 +2154,13 @@ static void ip_mc_clear_src(struct ip_mc_list *pmc)
 
 /* Join a multicast group
  */
+// zhou: README,
 static int __ip_mc_join_group(struct sock *sk, struct ip_mreqn *imr,
 			      unsigned int mode)
 {
+    // zhou: "imr_multiaddr, imr_interface" includes in "ip_mreq"
+
+    // zhou: Multicast IP address
 	__be32 addr = imr->imr_multiaddr.s_addr;
 	struct ip_mc_socklist *iml, *i;
 	struct in_device *in_dev;
@@ -2170,6 +2175,7 @@ static int __ip_mc_join_group(struct sock *sk, struct ip_mreqn *imr,
 	if (!ipv4_is_multicast(addr))
 		return -EINVAL;
 
+    // zhou: according to "imr_interfasce" find network device.
 	in_dev = ip_mc_find_dev(net, imr);
 
 	if (!in_dev) {
@@ -2186,6 +2192,7 @@ static int __ip_mc_join_group(struct sock *sk, struct ip_mreqn *imr,
 		count++;
 	}
 	err = -ENOBUFS;
+    // zhou:
 	if (count >= net->ipv4.sysctl_igmp_max_memberships)
 		goto done;
 	iml = sock_kmalloc(sk, sizeof(*iml), GFP_KERNEL);

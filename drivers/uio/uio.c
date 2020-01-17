@@ -1041,6 +1041,7 @@ static void __exit uio_exit(void)
 	idr_destroy(&uio_idr);
 }
 
+// zhou: this is UIO kernel feature
 module_init(uio_init)
 module_exit(uio_exit)
 MODULE_LICENSE("GPL v2");

@@ -241,6 +241,7 @@ struct sk_buff *__skb_try_recv_from_queue(struct sock *sk,
  *	quite explicitly by POSIX 1003.1g, don't change them without having
  *	the standard around please.
  */
+// zhou: when user space application want to read a packet
 struct sk_buff *__skb_try_recv_datagram(struct sock *sk, unsigned int flags,
 					void (*destructor)(struct sock *sk,
 							   struct sk_buff *skb),

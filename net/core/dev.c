@@ -153,6 +153,8 @@
 
 static DEFINE_SPINLOCK(ptype_lock);
 static DEFINE_SPINLOCK(offload_lock);
+
+// zhou: linking all kinds of protocols
 struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;
 struct list_head ptype_all __read_mostly;	/* Taps */
 static struct list_head offload_base __read_mostly;
@@ -382,7 +384,7 @@ static void unlist_netdevice(struct net_device *dev)
 /*
  *	Our notifier list
  */
-
+// zhou: this chain used to notify kernel components with events, such as NETDEV_UP, ...
 static RAW_NOTIFIER_HEAD(netdev_chain);
 
 /*
@@ -437,7 +439,7 @@ static inline struct list_head *ptype_head(const struct packet_type *pt)
  *	guarantee all CPU's that are in middle of receiving packets
  *	will see the new packet type (until the next received packet).
  */
-
+// zhou: tell Network Device which kind of L3 protocols we need take care.
 void dev_add_pack(struct packet_type *pt)
 {
 	struct list_head *head = ptype_head(pt);
@@ -1368,6 +1370,7 @@ EXPORT_SYMBOL(netdev_features_change);
  *	the notifier chains for netdev_chain and sends a NEWLINK message
  *	to the routing socket.
  */
+// zhou: ??? comparing to netdev_features_changes(), do more (notify Routing Socket).
 void netdev_state_change(struct net_device *dev)
 {
 	if (dev->flags & IFF_UP) {
@@ -1400,7 +1403,7 @@ void netdev_notify_peers(struct net_device *dev)
 	rtnl_unlock();
 }
 EXPORT_SYMBOL(netdev_notify_peers);
-
+// zhou: open device
 static int __dev_open(struct net_device *dev, struct netlink_ext_ack *extack)
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
@@ -1422,6 +1425,7 @@ static int __dev_open(struct net_device *dev, struct netlink_ext_ack *extack)
 	if (ret)
 		return ret;
 
+    // zhou: "IFF_UP" is lower layer flag, "__LINK_STATE_START" should be higher
 	set_bit(__LINK_STATE_START, &dev->state);
 
 	if (ops->ndo_validate_addr)
@@ -2284,6 +2288,7 @@ int netdev_txq_to_tc(struct net_device *dev, unsigned int txq)
 }
 EXPORT_SYMBOL(netdev_txq_to_tc);
 
+// zhou: Transmit Packet Steering
 #ifdef CONFIG_XPS
 struct static_key xps_needed __read_mostly;
 EXPORT_SYMBOL(xps_needed);
@@ -3935,6 +3940,7 @@ struct netdev_queue *netdev_core_pick_tx(struct net_device *dev,
  *      the BH enable code must have IRQs enabled so that it will not deadlock.
  *          --BLG
  */
+// zhou: README,
 static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 {
 	struct net_device *dev = skb->dev;
@@ -4114,6 +4120,7 @@ int gro_normal_batch __read_mostly = 8;
 static inline void ____napi_schedule(struct softnet_data *sd,
 				     struct napi_struct *napi)
 {
+    // zhou: make napi_struct be a memeber of softnet_data.poll_list.
 	list_add_tail(&napi->poll_list, &sd->poll_list);
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
@@ -4136,6 +4143,7 @@ set_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 	    struct rps_dev_flow *rflow, u16 next_cpu)
 {
 	if (next_cpu < nr_cpu_ids) {
+// zhou: Receive Flow Steering
 #ifdef CONFIG_RFS_ACCEL
 		struct netdev_rx_queue *rxqueue;
 		struct rps_dev_flow_table *flow_table;
@@ -4603,6 +4611,7 @@ EXPORT_SYMBOL_GPL(generic_xdp_tx);
 
 static DEFINE_STATIC_KEY_FALSE(generic_xdp_needed_key);
 
+// zhou: README, XDP(eXpress Data Path) another fast path implemented in kernel.
 int do_xdp_generic(struct bpf_prog *xdp_prog, struct sk_buff *skb)
 {
 	if (xdp_prog) {
@@ -4682,7 +4691,10 @@ static int netif_rx_internal(struct sk_buff *skb)
  *	NET_RX_DROP     (packet was dropped)
  *
  */
-
+// zhou: legacy API before NAPI, NAPI use several, major is callback function
+//       registered by driver using "netif_napi_add()"
+//       "netif_rx()" and "netif_rx_ni()" are always be invoked in virtual network
+//       device.
 int netif_rx(struct sk_buff *skb)
 {
 	int ret;
@@ -4696,6 +4708,7 @@ int netif_rx(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(netif_rx);
 
+// zhou: used by DPDK KNI.
 int netif_rx_ni(struct sk_buff *skb)
 {
 	int err;
@@ -5003,6 +5016,8 @@ another_round:
 	if (pfmemalloc)
 		goto skip_taps;
 
+    // zhou: IPv4: struct packet_type ip_packet_type{};
+    //       ARP: struct packet_type arp_packet_type{}.
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
@@ -5167,6 +5182,8 @@ static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
  *	NET_RX_SUCCESS: no congestion
  *	NET_RX_DROP: packet was dropped
  */
+// zhou: key!!! This is the normal NAPI received packet handling function.
+//       If NIC driver enabled GRO, will invoke napi_gro_receive().
 int netif_receive_skb_core(struct sk_buff *skb)
 {
 	int ret;
@@ -5502,12 +5519,15 @@ static int napi_gro_complete(struct sk_buff *skb)
 
 	BUILD_BUG_ON(sizeof(struct napi_gro_cb) > sizeof(skb->cb));
 
+    // zhou: No Fragment?
 	if (NAPI_GRO_CB(skb)->count == 1) {
 		skb_shinfo(skb)->gso_size = 0;
 		goto out;
 	}
 
 	rcu_read_lock();
+
+    // zhou: IPv4, "struct packet_offload ip_packet_offload;" -> tcpv4_offload/udp_gro_receive
 	list_for_each_entry_rcu(ptype, head, list) {
 		if (ptype->type != type || !ptype->callbacks.gro_complete)
 			continue;
@@ -5525,6 +5545,7 @@ static int napi_gro_complete(struct sk_buff *skb)
 		return NET_RX_SUCCESS;
 	}
 
+    // zhou: here is normal way for packet handle.
 out:
 	return netif_receive_skb_internal(skb);
 }
@@ -5858,6 +5879,12 @@ static gro_result_t napi_skb_finish(struct napi_struct *napi,
 	return ret;
 }
 
+// zhou: [napi_gro_receive() -> napi_skb_finish() -> netif_receive_skb_internal() ->
+//       enqueue_to_backlog()]/
+//       [igb_msix_ring() -> napi_schedule()]
+//       -> ____napi_schedule() -> __raise_softirq_irqoff(NET_RX_SOFTIRQ)
+//       -> igb_poll() -> igb_clean_rx_irq() -> napi_gro_receive()
+//       GRO => Generic Receive Offload
 gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb)
 {
 	gro_result_t ret;
@@ -6046,8 +6073,12 @@ static void net_rps_send_ipi(struct softnet_data *remsd)
  * net_rps_action_and_irq_enable sends any pending IPI's for rps.
  * Note: called with local irq disabled, but exits with local irq enabled.
  */
+// zhou: handle RX interrupt again.
 static void net_rps_action_and_irq_enable(struct softnet_data *sd)
 {
+    // zhou: Receive Packet Steering, is logically a software implementation of RSS.
+//       Refer to, "linux-3.16.3/Documentation/networking/scaling.txt"
+
 #ifdef CONFIG_RPS
 	struct softnet_data *remsd = sd->rps_ipi_list;
 
@@ -6131,6 +6162,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
  * The entry's receive function will be scheduled to run.
  * Consider using __napi_schedule_irqoff() if hard irqs are masked.
  */
+// zhou: Key function, used by many NIC drivers' interrupt handler.
 void __napi_schedule(struct napi_struct *n)
 {
 	unsigned long flags;
@@ -6442,6 +6474,7 @@ static void init_gro_hash(struct napi_struct *napi)
 	napi->gro_bitmask = 0;
 }
 
+// zhou: initialize a napi context, will be member of softnet_data.poll_list
 void netif_napi_add(struct net_device *dev, struct napi_struct *napi,
 		    int (*poll)(struct napi_struct *, int), int weight)
 {
@@ -7862,6 +7895,7 @@ static void dev_change_rx_flags(struct net_device *dev, int flags)
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
 
+// zhou: only implemented by bridge/vlan/macvlan module.
 	if (ops->ndo_change_rx_flags)
 		ops->ndo_change_rx_flags(dev, flags);
 }
@@ -7875,6 +7909,8 @@ static int __dev_set_promiscuity(struct net_device *dev, int inc, bool notify)
 	ASSERT_RTNL();
 
 	dev->flags |= IFF_PROMISC;
+
+    // zhou: reference count for care about it.
 	dev->promiscuity += inc;
 	if (dev->promiscuity == 0) {
 		/*
@@ -7996,6 +8032,7 @@ EXPORT_SYMBOL(dev_set_allmulti);
  *	filtering it is put in promiscuous mode while unicast addresses
  *	are present.
  */
+// zhou: README,
 void __dev_set_rx_mode(struct net_device *dev)
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
@@ -8165,6 +8202,7 @@ void __dev_notify_flags(struct net_device *dev, unsigned int old_flags,
  *	Change settings on device based state flags. The flags are
  *	in the userspace exported format.
  */
+// zhou: ifconfig will come here finally.
 int dev_change_flags(struct net_device *dev, unsigned int flags,
 		     struct netlink_ext_ack *extack)
 {
@@ -8175,6 +8213,7 @@ int dev_change_flags(struct net_device *dev, unsigned int flags,
 	if (ret < 0)
 		return ret;
 
+    // zhou: notify when device up, down, ...
 	changes = (old_flags ^ dev->flags) | (old_gflags ^ dev->gflags);
 	__dev_notify_flags(dev, old_flags, changes);
 	return ret;
@@ -9212,7 +9251,7 @@ EXPORT_SYMBOL(netdev_update_lockdep_key);
  *	The locking appears insufficient to guarantee two parallel registers
  *	will not get the same name.
  */
-
+// zhou: pay attention to description
 int register_netdevice(struct net_device *dev)
 {
 	int ret;
@@ -9300,6 +9339,7 @@ int register_netdevice(struct net_device *dev)
 	 */
 	dev->vlan_features |= NETIF_F_HIGHDMA;
 
+    // zhou: Scatter/Gather IO
 	/* Make NETIF_F_SG inheritable to tunnel devices.
 	 */
 	dev->hw_enc_features |= NETIF_F_SG | NETIF_F_GSO_PARTIAL;
@@ -9429,6 +9469,7 @@ EXPORT_SYMBOL_GPL(init_dummy_netdev);
  *	and expands the device name if you passed a format string to
  *	alloc_netdev.
  */
+// zhou: make this network device visible to kernel core system
 int register_netdev(struct net_device *dev)
 {
 	int err;
@@ -9698,6 +9739,7 @@ void netdev_freemem(struct net_device *dev)
  * and performs basic initialization.  Also allocates subqueue structs
  * for each queue on the device.
  */
+// zhou: Ethernet is just one kind of the net device, whose dedicated function in eth.c
 struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 		unsigned char name_assign_type,
 		void (*setup)(struct net_device *),
@@ -9742,9 +9784,11 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	if (dev_addr_init(dev))
 		goto free_pcpu;
 
+    // zhou: multicast and unicast address list init.
 	dev_mc_init(dev);
 	dev_uc_init(dev);
 
+    // zhou: Network Namespace, defined net/core/net_namespace.c
 	dev_net_set(dev, &init_net);
 
 	netdev_register_lockdep_key(dev);
@@ -10463,6 +10507,10 @@ static int __init net_dev_init(void)
 	if (register_pernet_device(&default_device_ops))
 		goto out;
 
+    // zhou: set cb function of softirq member: NET_TX_SOFTIRQ and NET_RX_SOFTIRQ
+    // Not only the ksoftirqd will invoke these cb fucntion, such as immediately
+    // following irq handler, middle of stack processing.
+    // Refer to "__do_softirq(void)", which will invoke all softirq register cb.
 	open_softirq(NET_TX_SOFTIRQ, net_tx_action);
 	open_softirq(NET_RX_SOFTIRQ, net_rx_action);
 

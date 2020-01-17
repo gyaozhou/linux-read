@@ -2006,6 +2006,7 @@ static void shrink_readahead_size_eio(struct file *filp,
  * * total number of bytes copied, including those the were already @written
  * * negative error code if nothing was copied
  */
+// zhou: README,
 static ssize_t generic_file_buffered_read(struct kiocb *iocb,
 		struct iov_iter *iter, ssize_t written)
 {
@@ -2256,6 +2257,7 @@ out:
 
 	*ppos = ((loff_t)index << PAGE_SHIFT) + offset;
 	file_accessed(filp);
+
 	return written ? written : error;
 }
 
@@ -2270,6 +2272,7 @@ out:
  * * number of bytes copied, even for partial reads
  * * negative error code if nothing was read
  */
+// zhou: README,
 ssize_t
 generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {

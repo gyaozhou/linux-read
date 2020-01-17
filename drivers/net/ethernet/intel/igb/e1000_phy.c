@@ -1973,6 +1973,7 @@ out:
 	return ret_val;
 }
 
+// zhou: phy was shared between igb
 /**
  *  igb_get_phy_info_igp - Retrieve igp PHY information
  *  @hw: pointer to the HW structure

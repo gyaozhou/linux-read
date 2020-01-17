@@ -92,6 +92,7 @@ union e1000_adv_rx_desc {
 #define E1000_RXDADV_STAT_TS             0x10000 /* Pkt was time stamped */
 #define E1000_RXDADV_STAT_TSIP           0x08000 /* timestamp in packet */
 
+// zhou: the registers on NIC have difference meanings/value when read and write.
 /* Transmit Descriptor - Advanced */
 union e1000_adv_tx_desc {
 	struct {

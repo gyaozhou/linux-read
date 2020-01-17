@@ -88,6 +88,9 @@ tcp_timewait_check_oow_rate_limit(struct inet_timewait_sock *tw,
  *
  * We don't need to initialize tmp_out.sack_ok as we don't use the results
  */
+
+// zhou: handle segment when (sk->sk_state == TCP_TIME_WAIT)
+//       To be studied.
 enum tcp_tw_status
 tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 			   const struct tcphdr *th)
@@ -97,6 +100,8 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 	bool paws_reject = false;
 
 	tmp_opt.saw_tstamp = 0;
+
+    // zhou: The TCP Header includes options
 	if (th->doff > (sizeof(*th) >> 2) && tcptw->tw_ts_recent_stamp) {
 		tcp_parse_options(twsk_net(tw), skb, &tmp_opt, 0, NULL);
 
@@ -815,6 +820,7 @@ EXPORT_SYMBOL(tcp_check_req);
  * be created.
  */
 
+// zhou: create a new socket when listen() received a SYN
 int tcp_child_process(struct sock *parent, struct sock *child,
 		      struct sk_buff *skb)
 {

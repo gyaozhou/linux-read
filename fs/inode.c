@@ -2022,6 +2022,7 @@ void __init inode_init(void)
 					0);
 }
 
+// zhou: README, setup operation callback funtions for each file type.
 void init_special_inode(struct inode *inode, umode_t mode, dev_t rdev)
 {
 	inode->i_mode = mode;
@@ -2029,6 +2030,7 @@ void init_special_inode(struct inode *inode, umode_t mode, dev_t rdev)
 		inode->i_fop = &def_chr_fops;
 		inode->i_rdev = rdev;
 	} else if (S_ISBLK(mode)) {
+        // zhou: in case of Raw Block Device, read/write /dev/sda1.
 		inode->i_fop = &def_blk_fops;
 		inode->i_rdev = rdev;
 	} else if (S_ISFIFO(mode))

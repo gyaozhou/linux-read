@@ -897,6 +897,7 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 	return sprintf(buf, "%u\n", policy->cpuinfo.max_freq);
 }
 
+// zhou: all of below is Macro
 cpufreq_freq_attr_ro_perm(cpuinfo_cur_freq, 0400);
 cpufreq_freq_attr_ro(cpuinfo_min_freq);
 cpufreq_freq_attr_ro(cpuinfo_max_freq);
@@ -912,6 +913,7 @@ cpufreq_freq_attr_rw(scaling_max_freq);
 cpufreq_freq_attr_rw(scaling_governor);
 cpufreq_freq_attr_rw(scaling_setspeed);
 
+// zhou: static way to define our own attributes. sysfs_create_file() is dynamic way.
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
 	&cpuinfo_max_freq.attr,
@@ -929,6 +931,9 @@ static struct attribute *default_attrs[] = {
 
 #define to_policy(k) container_of(k, struct cpufreq_policy, kobj)
 #define to_attr(a) container_of(a, struct freq_attr, attr)
+
+// zhou: implement the interface defined by "struct kobj_type".
+//       find the actual attribute want to show, then invoke corresponding user-defined xx_show().
 
 static ssize_t show(struct kobject *kobj, struct attribute *attr, char *buf)
 {
@@ -981,11 +986,13 @@ static void cpufreq_sysfs_release(struct kobject *kobj)
 	complete(&policy->kobj_unregister);
 }
 
+// zhou: "struct sysfs_ops" defines only these two operations.
 static const struct sysfs_ops sysfs_ops = {
 	.show	= show,
 	.store	= store,
 };
 
+// zhou: used by kobject "cpufreq"
 static struct kobj_type ktype_cpufreq = {
 	.sysfs_ops	= &sysfs_ops,
 	.default_attrs	= default_attrs,

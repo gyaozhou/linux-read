@@ -3113,6 +3113,7 @@ static const struct pci_device_id nvme_id_table[] = {
 };
 MODULE_DEVICE_TABLE(pci, nvme_id_table);
 
+// zhou: just like other NIC dirver.
 static struct pci_driver nvme_driver = {
 	.name		= "nvme",
 	.id_table	= nvme_id_table,

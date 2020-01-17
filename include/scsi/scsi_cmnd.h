@@ -65,6 +65,8 @@ struct scsi_pointer {
 #define SCMD_STATE_COMPLETE	0
 #define SCMD_STATE_INFLIGHT	1
 
+// zhou: IO Request or other query sent to SCSI Target.
+//       Generated in Mid Level of SCSI subsystem, be excuted in Lower Level.
 struct scsi_cmnd {
 	struct scsi_request req;
 	struct scsi_device *device;
@@ -106,7 +108,7 @@ struct scsi_cmnd {
 
 	unsigned transfersize;	/* How much we are guaranteed to
 				   transfer with each SCSI transfer
-				   (ie, between disconnect / 
+				   (ie, between disconnect /
 				   reconnects.   Probably == sector
 				   size */
 
@@ -124,8 +126,8 @@ struct scsi_cmnd {
 	void (*scsi_done) (struct scsi_cmnd *);
 
 	/*
-	 * The following fields can be written to by the host specific code. 
-	 * Everything else should be left alone. 
+	 * The following fields can be written to by the host specific code.
+	 * Everything else should be left alone.
 	 */
 	struct scsi_pointer SCp;	/* Scratchpad used by some host adapters */
 

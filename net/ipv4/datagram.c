@@ -17,6 +17,7 @@
 #include <net/tcp_states.h>
 #include <net/sock_reuseport.h>
 
+// zhou: the method are shared by RAW and UDP.
 int __ip4_datagram_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 {
 	struct inet_sock *inet = inet_sk(sk);
@@ -61,6 +62,8 @@ int __ip4_datagram_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len
 		err = -EACCES;
 		goto out;
 	}
+
+    // zhou: for bind wild address, we set the actual address by route we found.
 	if (!inet->inet_saddr)
 		inet->inet_saddr = fl4->saddr;	/* Update source address */
 	if (!inet->inet_rcv_saddr) {
@@ -75,6 +78,7 @@ int __ip4_datagram_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len
 	sk_set_txhash(sk);
 	inet->inet_id = prandom_u32();
 
+    // zhou: set the route to sk, we will check it again when sending packet.
 	sk_dst_set(sk, &rt->dst);
 	err = 0;
 out:

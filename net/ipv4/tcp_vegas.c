@@ -331,6 +331,7 @@ static void __exit tcp_vegas_unregister(void)
 	tcp_unregister_congestion_control(&tcp_vegas);
 }
 
+// zhou: README
 module_init(tcp_vegas_register);
 module_exit(tcp_vegas_unregister);
 

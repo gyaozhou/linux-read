@@ -3387,6 +3387,7 @@ static unsigned int igb_max_channels(struct igb_adapter *adapter)
 	return igb_get_max_rss_queues(adapter);
 }
 
+// zhou: ethtool -S eth0, will show each channel's statistics.
 static void igb_get_channels(struct net_device *netdev,
 			     struct ethtool_channels *ch)
 {

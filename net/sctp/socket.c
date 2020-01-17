@@ -1287,6 +1287,8 @@ out_free:
  *
  * Returns >=0 if ok, <0 errno code on error.
  */
+
+// zhou: there is no implementation of API sctp_connectx(), instead by sctp_setsockopt().
 static int __sctp_setsockopt_connectx(struct sock *sk,
 				      struct sockaddr __user *addrs,
 				      int addrs_size,
@@ -1999,6 +2001,8 @@ static int sctp_sendmsg(struct sock *sk, struct msghdr *msg, size_t msg_len)
 		if (!sctp_style(sk, TCP) && !(sflags & SCTP_ADDR_OVER))
 			transport = NULL;
 	} else {
+        // zhou: there is no implementation of API sctp_connectx(), instead by sctp_setsockopt().
+
 		asoc = sctp_id2assoc(sk, sinfo->sinfo_assoc_id);
 		if (!asoc) {
 			err = -EPIPE;
@@ -3101,6 +3105,8 @@ static int sctp_setsockopt_rtoinfo(struct sock *sk, char __user *optval, unsigne
 	if (copy_from_user(&rtoinfo, optval, optlen))
 		return -EFAULT;
 
+    // zhou: Linux don't support SCTP_FUTURE_ASSOC/SCTP_CURRENT_ASSOC/SCTP_ALL_ASSOC
+    //       Association ID will be checked, if reasonable will be ignored.
 	asoc = sctp_id2assoc(sk, rtoinfo.srto_assoc_id);
 
 	/* Set the values to the specific association */
@@ -5136,6 +5142,8 @@ static int sctp_init_sock(struct sock *sk)
 	/* Control variables for partial data delivery. */
 	atomic_set(&sp->pd_mode, 0);
 	skb_queue_head_init(&sp->pd_lobby);
+
+    // zhou: default value is NOT interleave between different associations, and wait for this partial delivery.
 	sp->frag_interleave = 0;
 
 	/* Create a per socket endpoint structure.  Even if we

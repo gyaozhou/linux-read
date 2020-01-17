@@ -6738,6 +6738,7 @@ static int megasas_start_aen(struct megasas_instance *instance)
  * megasas_io_attach -	Attaches this driver to SCSI mid-layer
  * @instance:		Adapter soft state
  */
+// zhou: README,
 static int megasas_io_attach(struct megasas_instance *instance)
 {
 	struct Scsi_Host *host = instance->host;
@@ -6784,6 +6785,7 @@ static int megasas_io_attach(struct megasas_instance *instance)
 	/*
 	 * Notify the mid-layer about the new controller
 	 */
+    // zhou: README,
 	if (scsi_add_host(host, &instance->pdev->dev)) {
 		dev_err(&instance->pdev->dev,
 			"Failed to add host from %s %d\n",
@@ -7268,6 +7270,7 @@ static inline void megasas_init_ctrl_params(struct megasas_instance *instance)
  * @pdev:		PCI device structure
  * @id:			PCI ids of supported hotplugged adapter
  */
+// zhou: README,
 static int megasas_probe_one(struct pci_dev *pdev,
 			     const struct pci_device_id *id)
 {
@@ -7316,6 +7319,7 @@ static int megasas_probe_one(struct pci_dev *pdev,
 
 	pci_set_master(pdev);
 
+    // zhou:
 	host = scsi_host_alloc(&megasas_template,
 			       sizeof(struct megasas_instance));
 
@@ -7370,6 +7374,7 @@ static int megasas_probe_one(struct pci_dev *pdev,
 	/*
 	 * Store instance in PCI softstate
 	 */
+    // zhou: README,
 	pci_set_drvdata(pdev, instance);
 
 	/*
@@ -7383,6 +7388,7 @@ static int megasas_probe_one(struct pci_dev *pdev,
 	/*
 	 * Register with SCSI mid-layer
 	 */
+    // zhou: README,
 	if (megasas_io_attach(instance))
 		goto fail_io_attach;
 

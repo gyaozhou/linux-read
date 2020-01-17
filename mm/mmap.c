@@ -184,6 +184,8 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
 
 static int do_brk_flags(unsigned long addr, unsigned long request, unsigned long flags,
 		struct list_head *uf);
+
+// zhou: malloc(), "brk": the end of heap address APP expect.
 SYSCALL_DEFINE1(brk, unsigned long, brk)
 {
 	unsigned long retval;
@@ -215,6 +217,8 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 #else
 	min_brk = mm->start_brk;
 #endif
+
+    // zhou: if the new "brk" can't overlap with "Text segment"
 	if (brk < min_brk)
 		goto out;
 
@@ -257,6 +261,9 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 		}
 		goto success;
 	}
+
+    // zhou: only one heap, only one "vm_area_struct", if it not include expect
+    //       address, we should continue.
 
 	/* Check against existing mmap mappings. */
 	next = find_vma(mm, oldbrk);
@@ -1445,6 +1452,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		return -EAGAIN;
 
 	if (file) {
+        // zhou: if it's not a anon mmap, fetch the inode.
 		struct inode *inode = file_inode(file);
 		unsigned long flags_mask;
 
@@ -1455,6 +1463,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 
 		switch (flags & MAP_TYPE) {
 		case MAP_SHARED:
+            // zhou: the file's mode is conflict with mmap's mode.
 			/*
 			 * Force use of MAP_SHARED_VALIDATE with non-legacy
 			 * flags. E.g. MAP_SYNC is dangerous to use with
@@ -1511,6 +1520,8 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 			return -EINVAL;
 		}
 	} else {
+        // zhou: anon mapping.
+
 		switch (flags & MAP_TYPE) {
 		case MAP_SHARED:
 			if (vm_flags & (VM_GROWSDOWN|VM_GROWSUP))
@@ -1605,6 +1616,7 @@ out_fput:
 	return retval;
 }
 
+// zhou: mmap() implementation.
 SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 		unsigned long, prot, unsigned long, flags,
 		unsigned long, fd, unsigned long, pgoff)
@@ -1690,6 +1702,7 @@ static inline int accountable_mapping(struct file *file, vm_flags_t vm_flags)
 	return (vm_flags & (VM_NORESERVE | VM_SHARED | VM_WRITE)) == VM_WRITE;
 }
 
+// zhou: quite similar to do_brk()
 unsigned long mmap_region(struct file *file, unsigned long addr,
 		unsigned long len, vm_flags_t vm_flags, unsigned long pgoff,
 		struct list_head *uf)

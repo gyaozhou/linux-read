@@ -2132,6 +2132,9 @@ static void update_avg(u64 *avg, u64 sample)
 	*avg += diff >> 3;
 }
 
+// zhou: stop_sched_class->dl_sched_class->rt_sched_class->fair_sched_class->idle_sched_class
+//       These are schedulers used in kernel
+
 void sched_set_stop_task(int cpu, struct task_struct *stop)
 {
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
@@ -2513,6 +2516,7 @@ static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
  * Return: %true if @p->state changes (an actual wakeup was done),
  *	   %false otherwise.
  */
+// zhou: wake up a thread ...
 static int
 try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 {
@@ -3330,6 +3334,7 @@ asmlinkage __visible void schedule_tail(struct task_struct *prev)
 /*
  * context_switch - switch to the new MM and the new thread's register state.
  */
+// zhou: swith to another process/thread
 static __always_inline struct rq *
 context_switch(struct rq *rq, struct task_struct *prev,
 	       struct task_struct *next, struct rq_flags *rf)
@@ -3380,6 +3385,10 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
 
 	prepare_lock_switch(rq, next, rf);
+
+    // zhou: Step 2, "Switching the Kernel Mode stack and the hardware
+    //       context, which provide all the information needed by the kernel
+    //       to execute the new process, including the CPU registers."
 
 	/* Here we just switch the register state and the stack. */
 	switch_to(prev, next, prev);
@@ -3998,6 +4007,8 @@ restart:
  *
  * WARNING: must be called with preemption disabled!
  */
+// zhou: without the considerration of SMP run queue balance, this function
+//       will be invoked in current cpu to pick up next task from currnt run queue.
 static void __sched notrace __schedule(bool preempt)
 {
 	struct task_struct *prev, *next;
@@ -4145,6 +4156,7 @@ static void sched_update_worker(struct task_struct *tsk)
 	}
 }
 
+// zhou: entry function for schedule
 asmlinkage __visible void __sched schedule(void)
 {
 	struct task_struct *tsk = current;
@@ -6504,6 +6516,8 @@ int sched_cpu_dying(unsigned int cpu)
 }
 #endif
 
+
+// zhou: entry point of Scheduler.
 void __init sched_init_smp(void)
 {
 	sched_init_numa();

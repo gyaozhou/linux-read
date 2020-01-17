@@ -479,11 +479,13 @@ static int __inet_insert_ifa(struct in_ifaddr *ifa, struct nlmsghdr *nlh,
 
 	ASSERT_RTNL();
 
+    // zhou: no valid address
 	if (!ifa->ifa_local) {
 		inet_free_ifa(ifa);
 		return 0;
 	}
 
+    // zhou: try act as primary firstly
 	ifa->ifa_flags &= ~IFA_F_SECONDARY;
 	last_primary = &in_dev->ifa_list;
 
@@ -497,16 +499,21 @@ static int __inet_insert_ifa(struct in_ifaddr *ifa, struct nlmsghdr *nlh,
 		if (!(ifa1->ifa_flags & IFA_F_SECONDARY) &&
 		    ifa->ifa_scope <= ifa1->ifa_scope)
 			last_primary = &ifa1->ifa_next;
+
+        // zhou: same network mask, same subnetwork
 		if (ifa1->ifa_mask == ifa->ifa_mask &&
 		    inet_ifa_match(ifa1->ifa_address, ifa)) {
+            // zhou: same address
 			if (ifa1->ifa_local == ifa->ifa_local) {
 				inet_free_ifa(ifa);
 				return -EEXIST;
 			}
+            // zhou: same subnetwork should share same scope???
 			if (ifa1->ifa_scope != ifa->ifa_scope) {
 				inet_free_ifa(ifa);
 				return -EINVAL;
 			}
+            // zhou: the new ifa should be *secondary*
 			ifa->ifa_flags |= IFA_F_SECONDARY;
 		}
 
@@ -554,6 +561,7 @@ static int __inet_insert_ifa(struct in_ifaddr *ifa, struct nlmsghdr *nlh,
 	return 0;
 }
 
+// zhou: used in "ip address add xxxx"
 static int inet_insert_ifa(struct in_ifaddr *ifa)
 {
 	return __inet_insert_ifa(ifa, NULL, 0, NULL);
@@ -1061,10 +1069,13 @@ int devinet_ioctl(struct net *net, unsigned int cmd, struct ifreq *ifr)
 	rtnl_lock();
 
 	ret = -ENODEV;
+
+    // zhou: the ':' in ifr_name has been replaced with '\0'
 	dev = __dev_get_by_name(net, ifr->ifr_name);
 	if (!dev)
 		goto done;
 
+    // zhou: revert the ':'
 	if (colon)
 		*colon = ':';
 
@@ -1100,6 +1111,8 @@ int devinet_ioctl(struct net *net, unsigned int cmd, struct ifreq *ifr)
 	}
 
 	ret = -EADDRNOTAVAIL;
+
+    // zhou: in case of "SIOCSIFADDR/SIOCSIFFLAGS", new interface allowed
 	if (!ifa && cmd != SIOCSIFADDR && cmd != SIOCSIFFLAGS)
 		goto done;
 
@@ -1142,6 +1155,7 @@ int devinet_ioctl(struct net *net, unsigned int cmd, struct ifreq *ifr)
 		if (inet_abc_len(sin->sin_addr.s_addr) < 0)
 			break;
 
+        // zhou: new interface
 		if (!ifa) {
 			ret = -ENOBUFS;
 			ifa = inet_alloc_ifa();
@@ -1175,6 +1189,8 @@ int devinet_ioctl(struct net *net, unsigned int cmd, struct ifreq *ifr)
 			ifa->ifa_mask = inet_make_mask(32);
 		}
 		set_ifa_lifetime(ifa, INFINITY_LIFE_TIME, INFINITY_LIFE_TIME);
+
+        // zhou: init and append to list
 		ret = inet_set_ifa(dev, ifa);
 		break;
 
@@ -1565,6 +1581,7 @@ static int inetdev_event(struct notifier_block *this, unsigned long event,
 				inet_insert_ifa(ifa);
 			}
 		}
+        // zhou: IGMP, multicast xxx message
 		ip_mc_up(in_dev);
 		/* fall through */
 	case NETDEV_CHANGEADDR:
@@ -2747,6 +2764,7 @@ void __init devinet_init(void)
 
 	register_pernet_subsys(&devinet_ops);
 
+    // zhou: register handler for ioctl(e.g. ifconfig)?
 	register_gifconf(PF_INET, inet_gifconf);
 	register_netdevice_notifier(&ip_netdev_notifier);
 

@@ -298,6 +298,7 @@ static int __ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *
 		return dst_output(net, sk, skb);
 	}
 #endif
+
 	mtu = ip_skb_dst_mtu(sk, skb);
 	if (skb_is_gso(skb))
 		return ip_finish_output_gso(net, sk, skb, mtu);
@@ -471,6 +472,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 	if (rt)
 		goto packet_routed;
 
+    // zhou: check whethe the route is still valid, otherwise we have to search again.
 	/* Make sure we can route this packet. */
 	rt = (struct rtable *)__sk_dst_check(sk, 0);
 	if (!rt) {
@@ -1570,6 +1572,7 @@ int ip_send_skb(struct net *net, struct sk_buff *skb)
 	return err;
 }
 
+// zhou: kernel send out packets?
 int ip_push_pending_frames(struct sock *sk, struct flowi4 *fl4)
 {
 	struct sk_buff *skb;
@@ -1725,6 +1728,7 @@ out:
 	ip_rt_put(rt);
 }
 
+// zhou: IPv4 initialization.
 void __init ip_init(void)
 {
 	ip_rt_init();

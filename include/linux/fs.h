@@ -250,7 +250,7 @@ struct iattr {
  */
 #define FILESYSTEM_MAX_STACK_DEPTH 2
 
-/** 
+/**
  * enum positive_aop_returns - aop return codes with specific semantics
  *
  * @AOP_WRITEPAGE_ACTIVATE: Informs the caller that page writeback has
@@ -260,7 +260,7 @@ struct iattr {
  * 			    be a candidate for writeback again in the near
  * 			    future.  Other callers must be careful to unlock
  * 			    the page if they get this return.  Returned by
- * 			    writepage(); 
+ * 			    writepage();
  *
  * @AOP_TRUNCATED_PAGE: The AOP method that was handed a locked page has
  *  			unlocked it and the page might have been truncated.
@@ -359,6 +359,7 @@ typedef struct {
 typedef int (*read_actor_t)(read_descriptor_t *, struct page *,
 		unsigned long, unsigned long);
 
+// zhou: define the methods handle pages
 struct address_space_operations {
 	int (*writepage)(struct page *page, struct writeback_control *wbc);
 	int (*readpage)(struct file *, struct page *);
@@ -423,6 +424,9 @@ int pagecache_write_end(struct file *, struct address_space *mapping,
 				loff_t pos, unsigned len, unsigned copied,
 				struct page *page, void *fsdata);
 
+
+// zhou: Page Cache descriptor.
+
 /**
  * struct address_space - Contents of a cacheable, mappable object.
  * @host: Owner, either the inode or the block_device.
@@ -470,6 +474,7 @@ struct address_space {
 	 */
 struct request_queue;
 
+// zhou: used in "struct inode"
 struct block_device {
 	dev_t			bd_dev;  /* not a kdev_t - it's a search key */
 	int			bd_openers;
@@ -483,6 +488,8 @@ struct block_device {
 #ifdef CONFIG_SYSFS
 	struct list_head	bd_holder_disks;
 #endif
+
+    // zhou: if this is partition, point to gendisk's block_device, otherwise point to itself.
 	struct block_device *	bd_contains;
 	unsigned		bd_block_size;
 	u8			bd_partno;
@@ -490,6 +497,8 @@ struct block_device {
 	/* number of times partitions within this device have been opened. */
 	unsigned		bd_part_count;
 	int			bd_invalidated;
+
+    // zhou: "struct gendisk" allocated by every block device driver, connecting with driver here.
 	struct gendisk *	bd_disk;
 	struct request_queue *  bd_queue;
 	struct backing_dev_info *bd_bdi;
@@ -620,6 +629,7 @@ is_uncached_acl(struct posix_acl *acl)
 
 struct fsnotify_mark_connector;
 
+// zhou: represent file itself, no matter how many fd, only one inode.
 /*
  * Keep mostly read-only and often accessed (especially for
  * the RCU path lookup and 'stat' data) fields at the beginning
@@ -639,6 +649,8 @@ struct inode {
 
 	const struct inode_operations	*i_op;
 	struct super_block	*i_sb;
+
+    // zhou: used in Page Cache.
 	struct address_space	*i_mapping;
 
 #ifdef CONFIG_SECURITY
@@ -658,6 +670,8 @@ struct inode {
 		const unsigned int i_nlink;
 		unsigned int __i_nlink;
 	};
+
+    // zhou: if this is a device file, this field represent the device number.
 	dev_t			i_rdev;
 	loff_t			i_size;
 	struct timespec64	i_atime;
@@ -709,11 +723,17 @@ struct inode {
 		void (*free_inode)(struct inode *);
 	};
 	struct file_lock_context	*i_flctx;
+
+    // zhou: if this inode belongs to a normal file, "i_data" pointed by "i_mapping"
 	struct address_space	i_data;
 	struct list_head	i_devices;
+
+    // zhou: if this is NOT a normal file, here pointer to their special info.
 	union {
 		struct pipe_inode_info	*i_pipe;
+        // zhou: block device
 		struct block_device	*i_bdev;
+        // zhou: char device
 		struct cdev		*i_cdev;
 		char			*i_link;
 		unsigned		i_dir_seq;
@@ -932,13 +952,18 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 		index <  ra->start + ra->size);
 }
 
+// zhou: file object
 struct file {
 	union {
 		struct llist_node	fu_llist;
 		struct rcu_head 	fu_rcuhead;
 	} f_u;
 	struct path		f_path;
+
+    // zhou: inode object
 	struct inode		*f_inode;	/* cached value */
+
+    // zhou: operations depend on each filesystem
 	const struct file_operations	*f_op;
 
 	/*
@@ -951,6 +976,8 @@ struct file {
 	unsigned int 		f_flags;
 	fmode_t			f_mode;
 	struct mutex		f_pos_lock;
+
+    // zhou: file offset for fd which share this file object
 	loff_t			f_pos;
 	struct fown_struct	f_owner;
 	const struct cred	*f_cred;
@@ -992,8 +1019,8 @@ static inline struct file *get_file(struct file *f)
 
 #define	MAX_NON_LFS	((1UL<<31) - 1)
 
-/* Page cache limit. The filesystems should put that into their s_maxbytes 
-   limits, otherwise bad things can happen in VM. */ 
+/* Page cache limit. The filesystems should put that into their s_maxbytes
+   limits, otherwise bad things can happen in VM. */
 #if BITS_PER_LONG==32
 #define MAX_LFS_FILESIZE	((loff_t)ULONG_MAX << PAGE_SHIFT)
 #elif BITS_PER_LONG==64
@@ -1421,6 +1448,8 @@ struct sb_writers {
 	struct percpu_rw_semaphore	rw_sem[SB_FREEZE_LEVELS];
 };
 
+// zhou: most of "super_block" data are fetched from disk, and periodically flushed to disk.
+//       Different filesystem have different way to maintenance disk, but similar.
 struct super_block {
 	struct list_head	s_list;		/* Keep this first */
 	dev_t			s_dev;		/* search index; _not_ kdev_t */
@@ -1428,7 +1457,11 @@ struct super_block {
 	unsigned long		s_blocksize;
 	loff_t			s_maxbytes;	/* Max file size */
 	struct file_system_type	*s_type;
+
+    // zhou: focus how to manage file, such as create/delete/stat/...
 	const struct super_operations	*s_op;
+
+    // zhou: some filesystem provide method for control the quota of each user can use.
 	const struct dquot_operations	*dq_op;
 	const struct quotactl_ops	*s_qcop;
 	const struct export_operations *s_export_op;
@@ -1544,6 +1577,8 @@ struct super_block {
 
 	/* s_inode_list_lock protects s_inodes */
 	spinlock_t		s_inode_list_lock ____cacheline_aligned_in_smp;
+
+    // zhou: all inodes: unused by process, used by process and clean, used by process and dirty.
 	struct list_head	s_inodes;	/* all inodes */
 
 	spinlock_t		s_inode_wblist_lock;
@@ -1818,6 +1853,7 @@ struct block_device_operations;
 
 struct iov_iter;
 
+// zhou:
 struct file_operations {
 	struct module *owner;
 	loff_t (*llseek) (struct file *, loff_t, int);
@@ -1860,6 +1896,8 @@ struct file_operations {
 	int (*fadvise)(struct file *, loff_t, loff_t, int);
 } __randomize_layout;
 
+
+// zhou: each filesystem always provide file/dir/special/... different operations sets.
 struct inode_operations {
 	struct dentry * (*lookup) (struct inode *,struct dentry *, unsigned int);
 	const char * (*get_link) (struct dentry *, struct inode *, struct delayed_call *);
@@ -1939,6 +1977,7 @@ extern loff_t vfs_dedupe_file_range_one(struct file *src_file, loff_t src_pos,
 					loff_t len, unsigned int remap_flags);
 
 
+// zhou: each filesystem type should support such operations.
 struct super_operations {
    	struct inode *(*alloc_inode)(struct super_block *sb);
 	void (*destroy_inode)(struct inode *);
@@ -2214,10 +2253,12 @@ extern int file_modified(struct file *file);
 int sync_inode(struct inode *inode, struct writeback_control *wbc);
 int sync_inode_metadata(struct inode *inode, int wait);
 
+
+// zhou: filesystem types registered in kernel.
 struct file_system_type {
 	const char *name;
 	int fs_flags;
-#define FS_REQUIRES_DEV		1 
+#define FS_REQUIRES_DEV		1
 #define FS_BINARY_MOUNTDATA	2
 #define FS_HAS_SUBTYPE		4
 #define FS_USERNS_MOUNT		8	/* Can be mounted by userns root */
@@ -2229,7 +2270,9 @@ struct file_system_type {
 		       const char *, void *);
 	void (*kill_sb) (struct super_block *);
 	struct module *owner;
+    // zhou: another type  of file system.
 	struct file_system_type * next;
+    // zhou: super block list of this kind of file system.
 	struct hlist_head fs_supers;
 
 	struct lock_class_key s_lock_key;
@@ -3000,7 +3043,7 @@ extern ssize_t kernel_read(struct file *, void *, size_t, loff_t *);
 extern ssize_t kernel_write(struct file *, const void *, size_t, loff_t *);
 extern ssize_t __kernel_write(struct file *, const void *, size_t, loff_t *);
 extern struct file * open_exec(const char *);
- 
+
 /* fs/dcache.c -- generic fs support functions */
 extern bool is_subdir(struct dentry *, struct dentry *);
 extern bool path_is_under(const struct path *, const struct path *);

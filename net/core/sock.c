@@ -139,6 +139,8 @@
 #include <net/busy_poll.h>
 
 static DEFINE_MUTEX(proto_list_mutex);
+
+// zhou: "proto_list" only used for /proc/net/protocols?
 static LIST_HEAD(proto_list);
 
 static void sock_inuse_add(struct net *net, int val);
@@ -330,6 +332,7 @@ int __sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 }
 EXPORT_SYMBOL(__sk_backlog_rcv);
 
+// zhou: set receive/send timeout value.
 static int sock_get_timeout(long timeo, void *optval, bool old_timeval)
 {
 	struct __kernel_sock_timeval tv;
@@ -444,12 +447,13 @@ static void sock_disable_timestamp(struct sock *sk, unsigned long flags)
 	}
 }
 
-
+// zhou: !!!
 int __sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 {
 	unsigned long flags;
 	struct sk_buff_head *list = &sk->sk_receive_queue;
 
+    // zhou: check the receive buffer length
 	if (atomic_read(&sk->sk_rmem_alloc) >= sk->sk_rcvbuf) {
 		atomic_inc(&sk->sk_drops);
 		trace_sock_rcvqueue_full(sk, skb);
@@ -471,9 +475,12 @@ int __sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 
 	spin_lock_irqsave(&list->lock, flags);
 	sock_skb_set_dropcount(sk, skb);
+
+    // zhou: append the new packet to "sk" receive queue
 	__skb_queue_tail(list, skb);
 	spin_unlock_irqrestore(&list->lock, flags);
 
+    // zhou: wake up select/poll/epoll.
 	if (!sock_flag(sk, SOCK_DEAD))
 		sk->sk_data_ready(sk);
 	return 0;
@@ -716,7 +723,7 @@ EXPORT_SYMBOL(sk_mc_loop);
  *	This is meant for all protocols to use and covers goings on
  *	at the socket level. Everything here is generic.
  */
-
+// zhou:
 int sock_setsockopt(struct socket *sock, int level, int optname,
 		    char __user *optval, unsigned int optlen)
 {
@@ -1641,6 +1648,8 @@ static void sk_prot_free(struct proto *prot, struct sock *sk)
 	module_put(owner);
 }
 
+// zhou: sk_alloc() not only allocate "struct sock" but also whole protocol specific space
+o
 /**
  *	sk_alloc - All socket objects are allocated here
  *	@net: the applicable net namespace
@@ -1661,6 +1670,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		 * See comment in struct sock definition to understand
 		 * why we need sk_prot_creator -acme
 		 */
+        // zhou: remember the protocol operations "struct proto"
 		sk->sk_prot = sk->sk_prot_creator = prot;
 		sk->sk_kern_sock = kern;
 		sock_lock_init(sk);
@@ -2762,7 +2772,7 @@ EXPORT_SYMBOL(sock_no_sendpage_locked);
 /*
  *	Default Socket Callbacks
  */
-
+// zhou: wakeup process wait for fd events.
 static void sock_def_wakeup(struct sock *sk)
 {
 	struct socket_wq *wq;
@@ -2785,7 +2795,8 @@ static void sock_def_error_report(struct sock *sk)
 	sk_wake_async(sk, SOCK_WAKE_IO, POLL_ERR);
 	rcu_read_unlock();
 }
-
+// zhou: default behavior except TCP/SCTP/..., triggered by receive new packet.
+//       And notify select/poll to wait up.
 static void sock_def_readable(struct sock *sk)
 {
 	struct socket_wq *wq;
@@ -2849,6 +2860,8 @@ void sk_stop_timer(struct sock *sk, struct timer_list* timer)
 }
 EXPORT_SYMBOL(sk_stop_timer);
 
+// zhou: connect "struct socket" and "struct sock", other inet_sock/udp_sock are
+//       colocated with "struct sock"
 void sock_init_data(struct socket *sock, struct sock *sk)
 {
 	sk_init_common(sk);
@@ -3365,11 +3378,13 @@ static int req_prot_init(const struct proto *prot)
 	return 0;
 }
 
+// zhou: Just register to proc FS, by the way prepare slab for struct sock if needed.
 int proto_register(struct proto *prot, int alloc_slab)
 {
 	int ret = -ENOBUFS;
 
 	if (alloc_slab) {
+        // zhou: the ->slab will be used in sk_alloc()
 		prot->slab = kmem_cache_create_usercopy(prot->name,
 					prot->obj_size, 0,
 					SLAB_HWCACHE_ALIGN | SLAB_ACCOUNT |
@@ -3386,6 +3401,7 @@ int proto_register(struct proto *prot, int alloc_slab)
 		if (req_prot_init(prot))
 			goto out_free_request_sock_slab;
 
+        // zhou: similar to rsk_prot, here is "time wait" sock, used for internal timer
 		if (prot->twsk_prot != NULL) {
 			prot->twsk_prot->twsk_slab_name = kasprintf(GFP_KERNEL, "tw_sock_%s", prot->name);
 
@@ -3404,6 +3420,7 @@ int proto_register(struct proto *prot, int alloc_slab)
 		}
 	}
 
+    // zhou: link to "proto_list", which used by proc_fs.
 	mutex_lock(&proto_list_mutex);
 	ret = assign_proto_idx(prot);
 	if (ret) {

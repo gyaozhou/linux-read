@@ -109,6 +109,7 @@ struct socket_wq {
  *  @sk: internal networking protocol agnostic socket representation
  *  @wq: wait queue for several uses
  */
+// zhou: VFS Layer "struct file" <---> INET Layer "struct socket" <---> Network Layer "struct sock"
 struct socket {
 	socket_state		state;
 

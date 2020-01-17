@@ -90,6 +90,7 @@ struct raw_hashinfo raw_v4_hashinfo = {
 };
 EXPORT_SYMBOL_GPL(raw_v4_hashinfo);
 
+// zhou: for Raw socket, the protocol type is the only key word for hash table.
 int raw_hash_sk(struct sock *sk)
 {
 	struct raw_hashinfo *h = sk->sk_prot->h.raw_hash;
@@ -124,6 +125,10 @@ struct sock *__raw_v4_lookup(struct net *net, struct sock *sk,
 	sk_for_each_from(sk) {
 		struct inet_sock *inet = inet_sk(sk);
 
+        // zhou: protocol match, we connect() to remote address and match,
+        //       we bind() with local adress and match,
+        //       we bind() with local adress and match,
+        //       specified NIC
 		if (net_eq(sock_net(sk), net) && inet->inet_num == num	&&
 		    !(inet->inet_daddr && inet->inet_daddr != raddr) 	&&
 		    !(inet->inet_rcv_saddr && inet->inet_rcv_saddr != laddr) &&
@@ -184,8 +189,11 @@ static int raw_v4_input(struct sk_buff *skb, const struct iphdr *iph, int hash)
 	sk = __raw_v4_lookup(net, __sk_head(head), iph->protocol,
 			     iph->saddr, iph->daddr, dif, sdif);
 
+    // zhou: walk through the list of this protocol one by one
 	while (sk) {
 		delivered = 1;
+
+        // zhou: setsockopt(), ICMP_FILTER used to set this ICMP filter. default 0
 		if ((iph->protocol != IPPROTO_ICMP || !icmp_filter(sk, skb)) &&
 		    ip_mc_sf_allow(sk, iph->daddr, iph->saddr,
 				   skb->dev->ifindex, sdif)) {
@@ -210,11 +218,14 @@ int raw_local_deliver(struct sk_buff *skb, int protocol)
 	struct sock *raw_sk;
 
 	hash = protocol & (RAW_HTABLE_SIZE - 1);
+
+    // zhou: to check whether any Raw Socket take care of this L4 protocol
 	raw_sk = sk_head(&raw_v4_hashinfo.ht[hash]);
 
 	/* If there maybe a raw socket we must check - if not we
 	 * don't care less
 	 */
+    // zhou: skb will be cloned if Raw Socket want to handle
 	if (raw_sk && !raw_v4_input(skb, ip_hdr(skb), hash))
 		raw_sk = NULL;
 

@@ -844,6 +844,7 @@ struct uclamp_rq {
  * (such as the load balancing or the thread migration code), lock
  * acquire operations must be ordered by ascending &runqueue.
  */
+// zhou: run queue, core structure
 struct rq {
 	/* runqueue lock: */
 	raw_spinlock_t		lock;
@@ -1699,6 +1700,7 @@ extern const u32		sched_prio_to_wmult[40];
 
 #define RETRY_TASK		((void *)-1UL)
 
+// zhou: Realtime, Normal ... Major category for scheduling
 struct sched_class {
 	const struct sched_class *next;
 
@@ -1713,6 +1715,7 @@ struct sched_class {
 
 	void (*check_preempt_curr)(struct rq *rq, struct task_struct *p, int flags);
 
+    // zhou: it's the scheduler's responsibility with in each class
 	struct task_struct *(*pick_next_task)(struct rq *rq);
 
 	void (*put_prev_task)(struct rq *rq, struct task_struct *p);
@@ -1780,9 +1783,11 @@ static inline void set_next_task(struct rq *rq, struct task_struct *next)
 #define for_class_range(class, _from, _to) \
 	for (class = (_from); class != (_to); class = class->next)
 
+// zhou: check each class by priority
 #define for_each_class(class) \
 	for_class_range(class, sched_class_highest, NULL)
 
+// zhou: stop and dead line sched class???
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class dl_sched_class;
 extern const struct sched_class rt_sched_class;

@@ -33,6 +33,7 @@ static void __free_fdtable(struct fdtable *fdt)
 	kfree(fdt);
 }
 
+// zhou: callback function, registered when we expand fdt
 static void free_fdtable_rcu(struct rcu_head *rcu)
 {
 	__free_fdtable(container_of(rcu, struct fdtable, rcu));
@@ -81,6 +82,8 @@ static void copy_fdtable(struct fdtable *nfdt, struct fdtable *ofdt)
 
 	copy_fd_bitmaps(nfdt, ofdt, ofdt->max_fds);
 }
+
+// zhou: alloc "struct fdtable" if we have to expand it.
 
 static struct fdtable * alloc_fdtable(unsigned int nr)
 {
@@ -173,8 +176,14 @@ static int expand_fdtable(struct files_struct *files, unsigned int nr)
 	}
 	cur_fdt = files_fdtable(files);
 	BUG_ON(nr < cur_fdt->max_fds);
+
+    // zhou: copy from old fdtable to new
 	copy_fdtable(new_fdt, cur_fdt);
 	rcu_assign_pointer(files->fdt, new_fdt);
+
+    // zhou: the old fdtable could be freed when no RCU reference.
+    //       Checking whether "fdt" pointer to pre-alloc "fdtab"
+
 	if (cur_fdt != &files->fdtab)
 		call_rcu(&cur_fdt->rcu, free_fdtable_rcu);
 	/* coupled with smp_rmb() in __fd_install() */
@@ -269,6 +278,7 @@ static unsigned int count_open_files(struct fdtable *fdt)
  * passed in files structure.
  * errorp will be valid only when the returned files_struct is NULL.
  */
+// zhou: we only duplicate "struct files_struct", but still share "struct file"
 struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 {
 	struct files_struct *newf;
@@ -477,6 +487,7 @@ static unsigned int find_next_fd(struct fdtable *fdt, unsigned int start)
 /*
  * allocate a file descriptor, mark it busy.
  */
+// zhou: allocate a new fd and return it.
 int __alloc_fd(struct files_struct *files,
 	       unsigned start, unsigned end, unsigned flags)
 {
@@ -502,6 +513,7 @@ repeat:
 	if (fd >= end)
 		goto out;
 
+    // zhou: if "fd" exceed maxfd, we have to expand fd bitmap object "struct fdtable"
 	error = expand_files(files, fd);
 	if (error < 0)
 		goto out;
@@ -512,6 +524,9 @@ repeat:
 	 */
 	if (error)
 		goto repeat;
+
+    // zhou: we have searched from "start" to "fd", we can update "next_fd" to avoid waste time
+    //       in next time. I assume that "next_fd" will also be upadated when some fd was closed.
 
 	if (start <= files->next_fd)
 		files->next_fd = fd + 1;
@@ -583,7 +598,7 @@ EXPORT_SYMBOL(put_unused_fd);
  * or really bad things will happen.  Normally you want to use
  * fd_install() instead.
  */
-
+// zhou: "file" is the original file object, "fd" is the new one.
 void __fd_install(struct files_struct *files, unsigned int fd,
 		struct file *file)
 {
@@ -604,6 +619,8 @@ void __fd_install(struct files_struct *files, unsigned int fd,
 	smp_rmb();
 	fdt = rcu_dereference_sched(files->fdt);
 	BUG_ON(fdt->fd[fd] != NULL);
+
+    // zhou: the two fd share one file object.
 	rcu_assign_pointer(fdt->fd[fd], file);
 	rcu_read_unlock_sched();
 }
@@ -670,6 +687,7 @@ out_unlock:
 	return -ENOENT;
 }
 
+// zhou: close these fd which with FD_CLOEXEC
 void do_close_on_exec(struct files_struct *files)
 {
 	unsigned i;
@@ -840,6 +858,7 @@ bool get_close_on_exec(unsigned int fd)
 	return res;
 }
 
+// zhou: handle all dup related system call
 static int do_dup2(struct files_struct *files,
 	struct file *file, unsigned fd, unsigned flags)
 __releases(&files->file_lock)
@@ -945,6 +964,7 @@ SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 	return ksys_dup3(oldfd, newfd, flags);
 }
 
+// zhou: int dup2(int oldfd, int newfd);
 SYSCALL_DEFINE2(dup2, unsigned int, oldfd, unsigned int, newfd)
 {
 	if (unlikely(newfd == oldfd)) { /* corner case */
@@ -975,6 +995,7 @@ int ksys_dup(unsigned int fildes)
 	return ret;
 }
 
+// zhou: int dup(int oldfd);
 SYSCALL_DEFINE1(dup, unsigned int, fildes)
 {
 	return ksys_dup(fildes);

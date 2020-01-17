@@ -455,6 +455,9 @@ static size_t vhost_get_desc_size(struct vhost_virtqueue *vq,
 	return sizeof(*vq->desc) * num;
 }
 
+
+// zhou: core function, which init a type of vhost device, such as netdev, SCSI
+//       disk, vsock.
 void vhost_dev_init(struct vhost_dev *dev,
 		    struct vhost_virtqueue **vqs, int nvqs,
 		    int iov_limit, int weight, int byte_weight)

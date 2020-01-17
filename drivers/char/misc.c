@@ -152,6 +152,10 @@ static const struct file_operations misc_fops = {
 	.llseek		= noop_llseek,
 };
 
+
+// zhou: most of simple kernel module which should be controlled by application,
+//       setup a character device in this way. e.g. /dev/vhost-net, /dev/tun
+
 /**
  *	misc_register	-	register a miscellaneous device
  *	@misc: device structure
@@ -202,6 +206,7 @@ int misc_register(struct miscdevice *misc)
 
 	dev = MKDEV(MISC_MAJOR, misc->minor);
 
+    // zhou: create device file under /dev
 	misc->this_device =
 		device_create_with_groups(misc_class, misc->parent, dev,
 					  misc, misc->groups, "%s", misc->name);
@@ -217,6 +222,8 @@ int misc_register(struct miscdevice *misc)
 		goto out;
 	}
 
+
+    // zhou: all the misc devices will share this list, discriminated by minor
 	/*
 	 * Add it to the front, so that later devices can "override"
 	 * earlier defaults
@@ -275,6 +282,8 @@ static int __init misc_init(void)
 		goto fail_remove;
 
 	err = -EIO;
+
+    // zhou: register_chrdev will invoke cdev_alloc()
 	if (register_chrdev(MISC_MAJOR, "misc", &misc_fops))
 		goto fail_printk;
 	misc_class->devnode = misc_devnode;

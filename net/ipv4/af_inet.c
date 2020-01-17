@@ -122,6 +122,7 @@
 /* The inetsw table contains everything that inet_create needs to
  * build a new socket.
  */
+// zhou: SOCK_XXX headers, used to link protocols of each sock type!!!
 static struct list_head inetsw[SOCK_MAX];
 static DEFINE_SPINLOCK(inetsw_lock);
 
@@ -243,7 +244,7 @@ EXPORT_SYMBOL(inet_listen);
 /*
  *	Create an inet socket.
  */
-
+// zhou: KEY function. Create a TCP/IPv4 stack socket.
 static int inet_create(struct net *net, struct socket *sock, int protocol,
 		       int kern)
 {
@@ -258,6 +259,8 @@ static int inet_create(struct net *net, struct socket *sock, int protocol,
 	if (protocol < 0 || protocol >= IPPROTO_MAX)
 		return -EINVAL;
 
+    // zhou: it's different from sk->state.
+    //       Here is general state for this socket, since not only TCP but also UDP can connect.
 	sock->state = SS_UNCONNECTED;
 
 	/* Look for the requested type/protocol pair. */
@@ -273,6 +276,9 @@ lookup_protocol:
 				break;
 		} else {
 			/* Check for the two wild cases. */
+
+            // zhou: when SOCK_RAW, if user specify IPPROTO_IP, will cause some problems.
+            //       Because SOCK_RAW doesn't have default protocol.
 			if (IPPROTO_IP == protocol) {
 				protocol = answer->protocol;
 				break;
@@ -318,6 +324,9 @@ lookup_protocol:
 	WARN_ON(!answer_prot->slab);
 
 	err = -ENOBUFS;
+
+    // zhou: alloc "struct sock" which depend on "answer_prot"
+    //       The first element of "tcp_sock"/"udp_sock"/"raw_sock" will be "inet_sock"/"sock"
 	sk = sk_alloc(net, PF_INET, GFP_KERNEL, answer_prot, kern);
 	if (!sk)
 		goto out;
@@ -344,6 +353,8 @@ lookup_protocol:
 
 	inet->inet_id = 0;
 
+    // zhou: connect "sock" with "sk" and e.g. init receive queue and write queue.
+    //       Binding operations.
 	sock_init_data(sock, sk);
 
 	sk->sk_destruct	   = inet_sock_destruct;
@@ -360,6 +371,7 @@ lookup_protocol:
 
 	sk_refcnt_debug_inc(sk);
 
+    // zhou: raw socket
 	if (inet->inet_num) {
 		/* It assumes that any protocol which allows
 		 * the user to assign a number at socket
@@ -367,6 +379,8 @@ lookup_protocol:
 		 * shares.
 		 */
 		inet->inet_sport = htons(inet->inet_num);
+
+        // zhou: "raw_v4_htable[RAWV4_HTABLE_SIZE]"
 		/* Add to protocol hash chains. */
 		err = sk->sk_prot->hash(sk);
 		if (err) {
@@ -375,6 +389,7 @@ lookup_protocol:
 		}
 	}
 
+    // zhou: such as "raw_init()"
 	if (sk->sk_prot->init) {
 		err = sk->sk_prot->init(sk);
 		if (err) {
@@ -431,11 +446,13 @@ int inet_release(struct socket *sock)
 }
 EXPORT_SYMBOL(inet_release);
 
+// zhou: invoked by sys_bind(), this function will be reused by same SOCK_XXX
 int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
 	struct sock *sk = sock->sk;
 	int err;
 
+    // zhou: SOCK_RAW have specific handler
 	/* If the socket has its own bind function then use it. (RAW) */
 	if (sk->sk_prot->bind) {
 		return sk->sk_prot->bind(sk, uaddr, addr_len);
@@ -514,10 +531,15 @@ int __inet_bind(struct sock *sk, struct sockaddr *uaddr, int addr_len,
 	if (sk->sk_state != TCP_CLOSE || inet->inet_num)
 		goto out_release_sock;
 
+    // zhou: recv and send address
 	inet->inet_rcv_saddr = inet->inet_saddr = addr->sin_addr.s_addr;
+
+    // zhou: when bind to MCAST or BCAST IP, set 0.
 	if (chk_addr_ret == RTN_MULTICAST || chk_addr_ret == RTN_BROADCAST)
 		inet->inet_saddr = 0;  /* Use device */
 
+    // zhou: link this port to table, then we can receive packet from L3.
+    //       Such as "udp_v4_get_port"
 	/* Make sure we are allowed to bind here. */
 	if (snum || !(inet->bind_address_no_port ||
 		      force_bind_address_no_port)) {
@@ -568,6 +590,8 @@ int inet_dgram_connect(struct socket *sock, struct sockaddr *uaddr,
 
 	if (!inet_sk(sk)->inet_num && inet_autobind(sk))
 		return -EAGAIN;
+
+    // zhou: ip4_datagram_connect()
 	return sk->sk_prot->connect(sk, uaddr, addr_len);
 }
 EXPORT_SYMBOL(inet_dgram_connect);
@@ -576,6 +600,7 @@ static long inet_wait_for_connect(struct sock *sk, long timeo, int writebias)
 {
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
 
+    // zhou: current task will sleep here. but how does scheduler work???
 	add_wait_queue(sk_sleep(sk), &wait);
 	sk->sk_write_pending += writebias;
 
@@ -652,6 +677,7 @@ int __inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 				goto out;
 		}
 
+        // zhou: "tcp_v4_connect()"
 		err = sk->sk_prot->connect(sk, uaddr, addr_len);
 		if (err < 0)
 			goto out;
@@ -909,7 +935,7 @@ EXPORT_SYMBOL(inet_shutdown);
  *	loads the devconfigure module does its configuring and unloads it.
  *	There's a good 20K of config code hanging around the kernel.
  */
-
+// zhou:
 int inet_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 {
 	struct sock *sk = sock->sk;
@@ -1016,6 +1042,7 @@ const struct proto_ops inet_stream_ops = {
 };
 EXPORT_SYMBOL(inet_stream_ops);
 
+// zhou: VFS layer operations, but some of them relay on L4 operations such as "sendmsg".
 const struct proto_ops inet_dgram_ops = {
 	.family		   = PF_INET,
 	.owner		   = THIS_MODULE,
@@ -1076,6 +1103,7 @@ static const struct proto_ops inet_sockraw_ops = {
 #endif
 };
 
+// zhou: to be registered to "net_families[NPROTO]"
 static const struct net_proto_family inet_family_ops = {
 	.family = PF_INET,
 	.create = inet_create,
@@ -1090,6 +1118,7 @@ static struct inet_protosw inetsw_array[] =
 	{
 		.type =       SOCK_STREAM,
 		.protocol =   IPPROTO_TCP,
+        // zhou: operations in "tcp_prot" similar with "inet_stream_ops"
 		.prot =       &tcp_prot,
 		.ops =        &inet_stream_ops,
 		.flags =      INET_PROTOSW_PERMANENT |
@@ -1123,6 +1152,8 @@ static struct inet_protosw inetsw_array[] =
 
 #define INETSW_ARRAY_LEN ARRAY_SIZE(inetsw_array)
 
+// zhou: protocol SWitch table, for "socket type".
+//       SOCK_XXX as array index, protocol as node of list.
 void inet_register_protosw(struct inet_protosw *p)
 {
 	struct list_head *lh;
@@ -1146,6 +1177,8 @@ void inet_register_protosw(struct inet_protosw *p)
 			goto out_permanent;
 		last_perm = lh;
 	}
+
+    // zhou: put the new protocol in list
 
 	/* Add the new entry after the last permanent entry if any, so that
 	 * the new entry does not override a permanent entry when matched with
@@ -1428,6 +1461,8 @@ struct sk_buff *inet_gro_receive(struct list_head *head, struct sk_buff *skb)
 	proto = iph->protocol;
 
 	rcu_read_lock();
+
+    // zhou: L4's GRO Offload Operations.
 	ops = rcu_dereference(inet_offloads[proto]);
 	if (!ops || !ops->callbacks.gro_receive)
 		goto out_unlock;
@@ -1712,6 +1747,8 @@ static struct net_protocol tcp_protocol = {
 	.icmp_strict_tag_validation = 1,
 };
 
+// zhou: invoked by L3
+
 /* thinking of making this const? Don't.
  * early_demux can change based on sysctl.
  */
@@ -1859,7 +1896,7 @@ static int ipv4_proc_init(void);
 /*
  *	IP protocol layer initialiser
  */
-
+// zhou: used by GRO or GSO enabled.
 static struct packet_offload ip_packet_offload __read_mostly = {
 	.type = cpu_to_be16(ETH_P_IP),
 	.callbacks = {
@@ -1906,6 +1943,16 @@ static struct packet_type ip_packet_type __read_mostly = {
 	.list_func = ip_list_rcv,
 };
 
+
+/**
+   zhou: inet_init() takes care of the initialization of all the subsytems related to IPv4,
+   including the L4 protocols.
+
+   So, it's the entry point for TCP/IP stack initialization. TCP/IPv6 are different from
+   TCP/IPv4 stack, like the difference between unix/bluetooth/xxx stacks.
+   The common part are put in ./net/core/ or ./net/, such as stream/datagram generic
+*/
+
 static int __init inet_init(void)
 {
 	struct inet_protosw *q;
@@ -1918,6 +1965,10 @@ static int __init inet_init(void)
 	if (rc)
 		goto out;
 
+////////////////////////////////////////////////////////////////////////////////
+    // zhou: prepare SLAB cache for L4 XXX_sk which will be exposed to user
+    //       Not useful for both UL and DL packets handling.
+    //       "inet_register_protosw()" is one handle things
 	rc = proto_register(&udp_prot, 1);
 	if (rc)
 		goto out_unregister_tcp_proto;
@@ -1930,6 +1981,8 @@ static int __init inet_init(void)
 	if (rc)
 		goto out_unregister_raw_proto;
 
+
+//////////////////////////////Protocol Family////////////////////////////////////
 	/*
 	 *	Tell SOCKET that we are alive...
 	 */
@@ -1940,6 +1993,7 @@ static int __init inet_init(void)
 	ip_static_sysctl_init();
 #endif
 
+////////////////////////////////Protocol/////////////////////////////////////////
 	/*
 	 *	Add all the base protocols.
 	 */
@@ -1955,10 +2009,15 @@ static int __init inet_init(void)
 		pr_crit("%s: Cannot add IGMP protocol\n", __func__);
 #endif
 
+/////////////////////////////////Socket Type//////////////////////////////////////
+        // zhou: SOCK type, such as SOCK_DGRAM, SOCK_STREAM, ...
+
 	/* Register the socket-side information for inet_create. */
 	for (r = &inetsw[0]; r < &inetsw[SOCK_MAX]; ++r)
 		INIT_LIST_HEAD(r);
 
+    // zhou: much more important than "proto_register()". It provides "struct proto" and
+    //       other information for socket creation.
 	for (q = inetsw_array; q < &inetsw_array[INETSW_ARRAY_LEN]; ++q)
 		inet_register_protosw(q);
 
@@ -1968,6 +2027,7 @@ static int __init inet_init(void)
 
 	arp_init();
 
+    // zhou: ip_init()->ip_rt_init()->devinet_init()->register_netdevice_notifier()
 	/*
 	 *	Set the IP module up
 	 */
@@ -2036,6 +2096,7 @@ fs_initcall(inet_init);
 /* ------------------------------------------------------------------------ */
 
 #ifdef CONFIG_PROC_FS
+// zhou: create each kind of proc directories
 static int __init ipv4_proc_init(void)
 {
 	int rc = 0;

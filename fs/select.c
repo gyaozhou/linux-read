@@ -11,7 +11,7 @@
  *     parameter to reflect time remaining.
  *
  *  24 January 2000
- *     Changed sys_poll()/do_poll() to use PAGE_SIZE chunk-based allocation 
+ *     Changed sys_poll()/do_poll() to use PAGE_SIZE chunk-based allocation
  *     of fds to overcome nfds < 16390 descriptors limit (Tigran Aivazian).
  */
 
@@ -129,12 +129,14 @@ void poll_initwait(struct poll_wqueues *pwq)
 }
 EXPORT_SYMBOL(poll_initwait);
 
+// zhou: remove node from wait queue.
 static void free_poll_entry(struct poll_table_entry *entry)
 {
 	remove_wait_queue(entry->wait_address, &entry->wait);
 	fput(entry->filp);
 }
 
+// zhou: free memory allocated for poll_table_entryo
 void poll_freewait(struct poll_wqueues *pwq)
 {
 	struct poll_table_page * p = pwq->table;
@@ -157,13 +159,16 @@ void poll_freewait(struct poll_wqueues *pwq)
 }
 EXPORT_SYMBOL(poll_freewait);
 
+
 static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
 {
 	struct poll_table_page *table = p->table;
 
+    // zhou: use stack firstly.
 	if (p->inline_index < N_INLINE_POLL_ENTRIES)
 		return p->inline_entries + p->inline_index++;
 
+    // zhou: have not been alloc Page or latest alloc Page is full.
 	if (!table || POLL_TABLE_FULL(table)) {
 		struct poll_table_page *new_table;
 
@@ -180,6 +185,13 @@ static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
 
 	return table->entry++;
 }
+
+// zhou: although select/poll almost do nothing in wake up cb function, but th
+// process will be reschduled, and continues running poll_schedule_timeout().
+// select()/poll() will return with events.
+// This is also the part of reason why select/poll performance is not high, since
+// it wast the chance to record which fd has active event, it will poll all fd
+// again when be reschduled.
 
 static int __pollwake(wait_queue_entry_t *wait, unsigned mode, int sync, void *key)
 {
@@ -207,6 +219,8 @@ static int __pollwake(wait_queue_entry_t *wait, unsigned mode, int sync, void *k
 	return default_wake_function(&dummy_wait, mode, sync, key);
 }
 
+// zhou: the way of wake up sleep process registered by process itself.
+//       For socket, it usually happened in RCV/SND some data.
 static int pollwake(wait_queue_entry_t *wait, unsigned mode, int sync, void *key)
 {
 	struct poll_table_entry *entry;
@@ -217,6 +231,8 @@ static int pollwake(wait_queue_entry_t *wait, unsigned mode, int sync, void *key
 	return __pollwake(wait, mode, sync, key);
 }
 
+// zhou: invoked by file's operation .poll, which will put current process in
+// sleep in case of nothing happened.
 /* Add a new entry */
 static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 				poll_table *p)
@@ -226,10 +242,14 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 	if (!entry)
 		return;
 	entry->filp = get_file(filp);
+
+    // zhou: the fd corresponding socket wait queue head address
 	entry->wait_address = wait_address;
 	entry->key = p->_key;
 	init_waitqueue_func_entry(&entry->wait, pollwake);
 	entry->wait.private = pwq;
+
+    // zhou: poll_table_entry.wait.task_list is a node symbol, added to wait queue.
 	add_wait_queue(wait_address, &entry->wait);
 }
 
@@ -238,7 +258,9 @@ static int poll_schedule_timeout(struct poll_wqueues *pwq, int state,
 {
 	int rc = -EINTR;
 
+    // zhou: lose CPU
 	set_current_state(state);
+
 	if (!pwq->triggered)
 		rc = schedule_hrtimeout_range(expires, slack, HRTIMER_MODE_ABS);
 	__set_current_state(TASK_RUNNING);
@@ -473,6 +495,7 @@ static inline void wait_key_set(poll_table *wait, unsigned long in,
 		wait->_key |= POLLOUT_SET;
 }
 
+// zhou: core procedure for select()
 static int do_select(int n, fd_set_bits *fds, struct timespec64 *end_time)
 {
 	ktime_t expire, *to = NULL;
@@ -491,6 +514,7 @@ static int do_select(int n, fd_set_bits *fds, struct timespec64 *end_time)
 		return retval;
 	n = retval;
 
+    // zhou: init table, inlcudes callback function.
 	poll_initwait(&table);
 	wait = &table.pt;
 	if (end_time && !end_time->tv_sec && !end_time->tv_nsec) {
@@ -503,6 +527,9 @@ static int do_select(int n, fd_set_bits *fds, struct timespec64 *end_time)
 
 	retval = 0;
 	for (;;) {
+
+        // zhou: even current process waked up by events, comes here,
+        //       we still have to poll each fd includes hole.
 		unsigned long *rinp, *routp, *rexp, *inp, *outp, *exp;
 		bool can_busy_loop = false;
 
@@ -521,6 +548,7 @@ static int do_select(int n, fd_set_bits *fds, struct timespec64 *end_time)
 				continue;
 			}
 
+            // zhou: bit by bit forward within sizeof(long) bytes.
 			for (j = 0; j < BITS_PER_LONG; ++j, ++i, bit <<= 1) {
 				struct fd f;
 				if (i >= n)
@@ -534,6 +562,9 @@ static int do_select(int n, fd_set_bits *fds, struct timespec64 *end_time)
 					mask = vfs_poll(f.file, wait);
 
 					fdput(f);
+
+                    // zhou: check the result got from stack, if any event already
+                    //       happened, clear the cb which put current process sleep
 					if ((mask & POLLIN_SET) && (in & bit)) {
 						res_in |= bit;
 						retval++;
@@ -600,10 +631,12 @@ static int do_select(int n, fd_set_bits *fds, struct timespec64 *end_time)
 			to = &expire;
 		}
 
+        // zhou: if no break, loop will comes here and be scheduled.
 		if (!poll_schedule_timeout(&table, TASK_INTERRUPTIBLE,
 					   to, slack))
 			timed_out = 1;
 	}
+// zhou: this loop used to protect from unexpected wake up.
 
 	poll_freewait(&table);
 
@@ -626,6 +659,11 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 	int ret, max_fds;
 	size_t size, alloc_size;
 	struct fdtable *fdt;
+
+    // zhou: by default 256 bytes, long=4bytes in 32bits and 8bytes in 64bits,
+    //       then, has 64/32 elements.
+    //       This structure allocated in kernel stack of current process.
+
 	/* Allocate small arguments on the stack to save memory and be faster */
 	long stack_fds[SELECT_STACK_ALLOC/sizeof(long)];
 
@@ -636,15 +674,18 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 	/* max_fds can increase, so grab it once to avoid race */
 	rcu_read_lock();
 	fdt = files_fdtable(current->files);
+
+    // zhou: max_fds is the max fd number opened by current process.
 	max_fds = fdt->max_fds;
 	rcu_read_unlock();
 	if (n > max_fds)
 		n = max_fds;
 
+    // zhou: there are must be a lot of hole in the bitmap.
 	/*
 	 * We need 6 bitmaps (in/out/ex for both incoming and outgoing),
 	 * since we used fdset we need to allocate memory in units of
-	 * long-words. 
+	 * long-words.
 	 */
 	size = FDS_BYTES(n);
 	bits = stack_fds;
@@ -666,11 +707,14 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 	fds.res_out = bits + 4*size;
 	fds.res_ex  = bits + 5*size;
 
+    // zhou: copy from user.
 	if ((ret = get_fd_set(n, inp, fds.in)) ||
 	    (ret = get_fd_set(n, outp, fds.out)) ||
 	    (ret = get_fd_set(n, exp, fds.ex)))
 		goto out;
-	zero_fd_set(n, fds.res_in);
+
+    // zhou: init return values.
+    zero_fd_set(n, fds.res_in);
 	zero_fd_set(n, fds.res_out);
 	zero_fd_set(n, fds.res_ex);
 
@@ -685,6 +729,7 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 		ret = 0;
 	}
 
+    // zhou: copy result back to user space.
 	if (set_fd_set(n, inp, fds.res_in) ||
 	    set_fd_set(n, outp, fds.res_out) ||
 	    set_fd_set(n, exp, fds.res_ex))
@@ -719,6 +764,8 @@ static int kern_select(int n, fd_set __user *inp, fd_set __user *outp,
 	return poll_select_finish(&end_time, tvp, PT_TIMEVAL, ret);
 }
 
+
+// zhou: system call "select()"
 SYSCALL_DEFINE5(select, int, n, fd_set __user *, inp, fd_set __user *, outp,
 		fd_set __user *, exp, struct __kernel_old_timeval __user *, tvp)
 {
@@ -760,6 +807,7 @@ static long do_pselect(int n, fd_set __user *inp, fd_set __user *outp,
 	return poll_select_finish(&end_time, tsp, type, ret);
 }
 
+// zhou: select() with signal handler.
 /*
  * Most architectures can't handle 7-argument syscalls. So we provide a
  * 6-argument version where the sixth argument is a pointer to a structure
@@ -823,12 +871,17 @@ SYSCALL_DEFINE1(old_select, struct sel_arg_struct __user *, arg)
 }
 #endif
 
+// zhou: the first node "poll_list" is pre-defined stack memory which hold first
+// part "pollfd", others will be stored in malloc Page, each Page will link
+// using a node "poll_list".
+
 struct poll_list {
 	struct poll_list *next;
 	int len;
 	struct pollfd entries[0];
 };
 
+// zhou: how many elements could be hold per Page, including poll_list.
 #define POLLFD_PER_PAGE  ((PAGE_SIZE-sizeof(struct poll_list)) / sizeof(struct pollfd))
 
 /*
@@ -863,6 +916,7 @@ static inline __poll_t do_pollfd(struct pollfd *pollfd, poll_table *pwait,
 	fdput(f);
 
 out:
+
 	/* ... and so does ->revents */
 	pollfd->revents = mangle_poll(mask);
 	return mask;
@@ -875,10 +929,16 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 	ktime_t expire, *to = NULL;
 	int timed_out = 0, count = 0;
 	u64 slack = 0;
+
+    // zhou: depend on "CONFIG_NET_RX_BUSY_POLL", refer to "Documentation/sysctl/net.txt"
+    // The purpose is that decrease the latency of event handling, busy wait for event in
+    // sysctl defined duration.
+
 	__poll_t busy_flag = net_busy_loop_on() ? POLL_BUSY_LOOP : 0;
 	unsigned long busy_start = 0;
 
 	/* Optimise the no-wait case */
+    // zhou: check but no-wait.
 	if (end_time && !end_time->tv_sec && !end_time->tv_nsec) {
 		pt->_qproc = NULL;
 		timed_out = 1;
@@ -891,6 +951,7 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 		struct poll_list *walk;
 		bool can_busy_loop = false;
 
+        // zhou: go through each segment which contain some fd, checking any event happened.
 		for (walk = list; walk != NULL; walk = walk->next) {
 			struct pollfd * pfd, * pfd_end;
 
@@ -924,6 +985,8 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 			if (signal_pending(current))
 				count = -ERESTARTNOHAND;
 		}
+
+        // zhou: already detect some event or timer expired.
 		if (count || timed_out)
 			break;
 
@@ -948,12 +1011,14 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 			to = &expire;
 		}
 
+        // zhou: give up CPU until some events wake me up.
 		if (!poll_schedule_timeout(wait, TASK_INTERRUPTIBLE, to, slack))
 			timed_out = 1;
 	}
 	return count;
 }
 
+// zhou: number of array pollfd(passed by APP) could be stored in stack.
 #define N_STACK_PPS ((sizeof(stack_pps) - sizeof(struct poll_list))  / \
 			sizeof(struct pollfd))
 
@@ -973,6 +1038,8 @@ static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 	if (nfds > rlimit(RLIMIT_NOFILE))
 		return -EINVAL;
 
+    // zhou: if too much fd (<100) passed by APP, we will put as much as possible
+    // on stack, and left put on new malloc memory.
 	len = min_t(unsigned int, nfds, N_STACK_PPS);
 	for (;;) {
 		walk->next = NULL;
@@ -980,6 +1047,7 @@ static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 		if (!len)
 			break;
 
+        // zhou: similar to memcpy(), so APP and kernel should share same structure.
 		if (copy_from_user(walk->entries, ufds + nfds-todo,
 					sizeof(struct pollfd) * walk->len))
 			goto out_fds;
@@ -988,6 +1056,7 @@ static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 		if (!todo)
 			break;
 
+        // zhou: for left can't hold in stack, copy them to help.
 		len = min(todo, POLLFD_PER_PAGE);
 		walk = walk->next = kmalloc(struct_size(walk, entries, len),
 					    GFP_KERNEL);
@@ -999,6 +1068,7 @@ static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 
 	poll_initwait(&table);
 	fdcount = do_poll(head, &table, end_time);
+    // zhou: remove from file's wait queue.
 	poll_freewait(&table);
 
 	for (walk = head; walk; walk = walk->next) {
@@ -1011,6 +1081,8 @@ static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
   	}
 
 	err = fdcount;
+
+    // zhou: free memory allocated for pollfd
 out_fds:
 	walk = head->next;
 	while (walk) {
@@ -1022,6 +1094,7 @@ out_fds:
 	return err;
 }
 
+// zhou: with the information stored in thread info, restart poll()
 static long do_restart_poll(struct restart_block *restart_block)
 {
 	struct pollfd __user *ufds = restart_block->poll.ufds;
@@ -1043,7 +1116,7 @@ static long do_restart_poll(struct restart_block *restart_block)
 	}
 	return ret;
 }
-
+// zhou: poll() implementaion
 SYSCALL_DEFINE3(poll, struct pollfd __user *, ufds, unsigned int, nfds,
 		int, timeout_msecs)
 {
@@ -1059,6 +1132,7 @@ SYSCALL_DEFINE3(poll, struct pollfd __user *, ufds, unsigned int, nfds,
 	ret = do_sys_poll(ufds, nfds, to);
 
 	if (ret == -ERESTARTNOHAND) {
+        // zhou: all this information stored used to restart poll in case interrupt.
 		struct restart_block *restart_block;
 
 		restart_block = &current->restart_block;
@@ -1077,7 +1151,7 @@ SYSCALL_DEFINE3(poll, struct pollfd __user *, ufds, unsigned int, nfds,
 	}
 	return ret;
 }
-
+// zhou: poll() with signal handler.
 SYSCALL_DEFINE5(ppoll, struct pollfd __user *, ufds, unsigned int, nfds,
 		struct __kernel_timespec __user *, tsp, const sigset_t __user *, sigmask,
 		size_t, sigsetsize)

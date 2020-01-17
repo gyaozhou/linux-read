@@ -14,6 +14,9 @@
 #include <uapi/linux/eventpoll.h>
 
 extern struct ctl_table epoll_table[]; /* for sysctl */
+
+// zhou: for better performance, most cases use stack.
+
 /* ~832 bytes of stack space used max in sys_select/sys_poll before allocating
    additional memory. */
 #ifdef __clang__
@@ -31,10 +34,15 @@ extern struct ctl_table epoll_table[]; /* for sysctl */
 
 struct poll_table_struct;
 
-/* 
+/*
  * structures and helpers for f_op->poll implementations
  */
 typedef void (*poll_queue_proc)(struct file *, wait_queue_head_t *, struct poll_table_struct *);
+
+
+// zhou: callback function which put current process to wait queue
+//       select()->__poll_wait(), epoll()->ep_ptable_queue_proc(),
+//       and key for events
 
 /*
  * Do not touch the structure directly, use the access functions
@@ -45,6 +53,7 @@ typedef struct poll_table_struct {
 	__poll_t _key;
 } poll_table;
 
+// zhou: __pollwake()/ep_ptable_queue_proc(), is invoked here.
 static inline void poll_wait(struct file * filp, wait_queue_head_t * wait_address, poll_table *p)
 {
 	if (p && p->_qproc && wait_address)
@@ -78,6 +87,8 @@ static inline void init_poll_funcptr(poll_table *pt, poll_queue_proc qproc)
 	pt->_key   = ~(__poll_t)0; /* all events enabled */
 }
 
+
+// zhou: each fd we concern will corresponding a "poll_table_entry"
 static inline bool file_can_poll(struct file *file)
 {
 	return file->f_op->poll;
@@ -97,16 +108,28 @@ struct poll_table_entry {
 	wait_queue_head_t *wait_address;
 };
 
+// zhou: wait queue for select() and poll()
 /*
  * Structures and helpers for select/poll syscall
  */
 struct poll_wqueues {
+    // zhou: cb function for make sleep.
 	poll_table pt;
+    // zhou: used to manage "poll_table_entry", single list
 	struct poll_table_page *table;
+
+    // zhou: here is major difference between select/poll and epoll.
+    //       Here only ONE thread sleep and wait up, if another thread invoke sleep,
+    //       there will be another kernel stack, another poll_wqueue object.
+
+    // zhou: current thread invoke select/poll.
 	struct task_struct *polling_task;
 	int triggered;
 	int error;
+
+     // zhou: total entry index
 	int inline_index;
+    // zhou: stack pre-alloc some.
 	struct poll_table_entry inline_entries[N_INLINE_POLL_ENTRIES];
 };
 

@@ -54,6 +54,8 @@ struct igb_adapter;
 #define IGB_MAX_VF_MC_ENTRIES	30
 #define IGB_MAX_VF_FUNCTIONS	8
 #define IGB_MAX_VFTA_ENTRIES	128
+
+// zhou: SR-IOV
 #define IGB_82576_VF_DEV_ID	0x10CA
 #define IGB_I350_VF_DEV_ID	0x1520
 
@@ -211,7 +213,9 @@ struct igb_tx_buffer {
 };
 
 struct igb_rx_buffer {
+    // zhou: Page's DMA address for device access
 	dma_addr_t dma;
+    // zhou: Page's descriptor
 	struct page *page;
 #if (BITS_PER_LONG > 32) || (PAGE_SIZE >= 65536)
 	__u32 page_offset;
@@ -249,16 +253,21 @@ struct igb_ring {
 	struct igb_q_vector *q_vector;	/* backlink to q_vector */
 	struct net_device *netdev;	/* back pointer to net_device */
 	struct device *dev;		/* device pointer for dma mapping */
+
+    // zhou: array of buffer, length equal to "count"
 	union {				/* array of buffer info structs */
 		struct igb_tx_buffer *tx_buffer_info;
 		struct igb_rx_buffer *rx_buffer_info;
 	};
+
+    // zhou: array of e1000_adv_rx_desc/e1000_adv_tx_desc,
 	void *desc;			/* descriptor ring memory */
 	unsigned long flags;		/* ring specific flags */
 	void __iomem *tail;		/* pointer to ring tail register */
 	dma_addr_t dma;			/* phys address of the ring */
 	unsigned int  size;		/* length of desc. ring in bytes */
 
+    // zhou: IGB_DEFAULT_TXD==256
 	u16 count;			/* number of desc. in the ring */
 	u8 queue_index;			/* logical index of the ring*/
 	u8 reg_idx;			/* physical index of the ring */
@@ -269,9 +278,13 @@ struct igb_ring {
 	s32 hicredit;			/* hiCredit in bytes */
 	s32 locredit;			/* loCredit in bytes */
 
+    // zhou: refer to "7.1.8 Receive Descriptor Ring Structure"
 	/* everything past this point are written often */
+    // zhou: Tail
 	u16 next_to_clean;
+    // zhou: Head
 	u16 next_to_use;
+    // zhou: have be read, but not been returned to NIC
 	u16 next_to_alloc;
 
 	union {
@@ -297,10 +310,13 @@ struct igb_q_vector {
 
 	u16 itr_val;
 	u8 set_itr;
+
+    // zhou: Interrupt Throttle - EITR
 	void __iomem *itr_register;
 
 	struct igb_ring_container rx, tx;
 
+    // zhou: will be appended to softnet_data.poll_list
 	struct napi_struct napi;
 	struct rcu_head rcu;	/* to avoid race with update stats on free */
 	char name[IFNAMSIZ + 9];
@@ -472,6 +488,7 @@ struct igb_adapter {
 	unsigned int flags;
 
 	unsigned int num_q_vectors;
+    // zhou: preserved for PF
 	struct msix_entry msix_entries[MAX_MSIX_ENTRIES];
 
 	/* Interrupt Throttle Rate */
@@ -484,10 +501,13 @@ struct igb_adapter {
 	u16 tx_work_limit;
 	u32 tx_timeout_count;
 	int num_tx_queues;
+
+    // zhou: 82576 has 16 rings
 	struct igb_ring *tx_ring[16];
 
 	/* RX */
 	int num_rx_queues;
+    // zhou: igb_ring are allocated with corresponding vectors.
 	struct igb_ring *rx_ring[16];
 
 	u32 max_frame_size;
@@ -529,6 +549,7 @@ struct igb_adapter {
 
 	int msg_enable;
 
+     // zhou: MAX_Q_VECTORS==8
 	struct igb_q_vector *q_vector[MAX_Q_VECTORS];
 	u32 eims_enable_mask;
 	u32 eims_other;
@@ -539,6 +560,8 @@ struct igb_adapter {
 	unsigned int vfs_allocated_count;
 	struct vf_data_storage *vf_data;
 	int vf_rate_link_speed;
+
+    // zhou: Receive-Side Scaling (RSS), each queue includes TX and RX
 	u32 rss_queues;
 	u32 wvbr;
 	u32 *shadow_vfta;
@@ -603,6 +626,8 @@ struct igb_adapter {
 #define IGB_FLAG_HAS_MSI		BIT(0)
 #define IGB_FLAG_DCA_ENABLED		BIT(1)
 #define IGB_FLAG_QUAD_PORT_A		BIT(2)
+
+// zhou: RX and TX share one interrupt (Legacy/MSI/MSI-X)
 #define IGB_FLAG_QUEUE_PAIRS		BIT(3)
 #define IGB_FLAG_DMAC			BIT(4)
 #define IGB_FLAG_RSS_FIELD_IPV4_UDP	BIT(6)

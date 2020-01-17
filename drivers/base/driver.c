@@ -135,6 +135,7 @@ void driver_remove_groups(struct device_driver *drv,
 	sysfs_remove_groups(&drv->p->kobj, groups);
 }
 
+// zhou: register driver with bus.
 /**
  * driver_register - register driver with bus
  * @drv: driver to register
@@ -154,6 +155,8 @@ int driver_register(struct device_driver *drv)
 		return -EINVAL;
 	}
 
+    // zhou: Neither [PCI] Core Nor driver core provide these three operations,
+    //       [igb] provide pci_driver.probe/remove/shutdown only.
 	if ((drv->bus->probe && drv->probe) ||
 	    (drv->bus->remove && drv->remove) ||
 	    (drv->bus->shutdown && drv->shutdown))
@@ -175,6 +178,7 @@ int driver_register(struct device_driver *drv)
 		bus_remove_driver(drv);
 		return ret;
 	}
+    // zhou: generate uevent "KOBJ_ADD"
 	kobject_uevent(&drv->p->kobj, KOBJ_ADD);
 
 	return ret;

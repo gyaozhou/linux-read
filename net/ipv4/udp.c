@@ -231,6 +231,7 @@ int udp_lib_get_port(struct sock *sk, unsigned short snum,
 	int    error = 1;
 	struct net *net = sock_net(sk);
 
+    // zhou: find a unused port
 	if (!snum) {
 		int low, high, remaining;
 		unsigned int rand;
@@ -271,7 +272,10 @@ int udp_lib_get_port(struct sock *sk, unsigned short snum,
 			cond_resched();
 		} while (++first != last);
 		goto fail;
+
 	} else {
+        // zhou: verify the port
+
 		hslot = udp_hashslot(udptable, net, snum);
 		spin_lock_bh(&hslot->lock);
 		if (hslot->count > 10) {
@@ -338,6 +342,8 @@ fail:
 }
 EXPORT_SYMBOL(udp_lib_get_port);
 
+// zhou: check whether the port was occupied or find a empty port
+//       The arithmetic was improved in latest kernel.
 int udp_v4_get_port(struct sock *sk, unsigned short snum)
 {
 	unsigned int hash2_nulladdr =
@@ -962,6 +968,7 @@ int udp_cmsg_send(struct sock *sk, struct msghdr *msg, u16 *gso_size)
 }
 EXPORT_SYMBOL_GPL(udp_cmsg_send);
 
+// zhou: invoked from userspace
 int udp_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 {
 	struct inet_sock *inet = inet_sk(sk);
@@ -1103,11 +1110,16 @@ int udp_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 		connected = 0;
 	}
 
+    // zhou: send to MCAST IP
 	if (ipv4_is_multicast(daddr)) {
 		if (!ipc.oif || netif_index_is_l3_master(sock_net(sk), ipc.oif))
 			ipc.oif = inet->mc_index;
+
+        // zhou: socket bind to MCAST IP or INADDR_ANY
 		if (!saddr)
+            // zhou: this mc_addr could be set by IP_MULTICAST_IF.
 			saddr = inet->mc_addr;
+
 		connected = 0;
 	} else if (!ipc.oif) {
 		ipc.oif = inet->uc_index;
@@ -1125,6 +1137,7 @@ int udp_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 		}
 	}
 
+    // zhou: if the UDP was connect() before, we need to check the route which setup before.
 	if (connected)
 		rt = (struct rtable *)sk_dst_check(sk, 0);
 
@@ -1720,7 +1733,7 @@ EXPORT_SYMBOL(__skb_recv_udp);
  * 	This should be easy, if there is something there we
  * 	return it, otherwise we block.
  */
-
+// zhou:
 int udp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int noblock,
 		int flags, int *addr_len)
 {
@@ -1768,6 +1781,7 @@ try_again:
 		else
 			err = skb_copy_datagram_msg(skb, off, msg, copied);
 	} else {
+        // zhou: postpone checksum validation here to avoid cost
 		err = skb_copy_and_csum_datagram_msg(skb, off, msg);
 
 		if (err == -EINVAL)
@@ -1806,6 +1820,7 @@ try_again:
 	if (udp_sk(sk)->gro_enabled)
 		udp_cmsg_recv(msg, sk, skb);
 
+    // zhou: "msg_control"
 	if (inet->cmsg_flags)
 		ip_cmsg_recv_offset(msg, sk, skb, sizeof(struct udphdr), off);
 
@@ -1953,6 +1968,7 @@ void udp_v4_rehash(struct sock *sk)
 	udp_lib_rehash(sk, new_hash);
 }
 
+// zhou: receive packet
 static int __udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 {
 	int rc;
@@ -2135,6 +2151,7 @@ EXPORT_SYMBOL(udp_sk_rx_dst_set);
  *
  *	Note: called only from the BH handler context.
  */
+// zhou: receive multicast messages, deliver to different fd.
 static int __udp4_lib_mcast_deliver(struct net *net, struct sk_buff *skb,
 				    struct udphdr  *uh,
 				    __be32 saddr, __be32 daddr,
@@ -2161,6 +2178,7 @@ start_lookup:
 	}
 
 	sk_for_each_entry_offset_rcu(sk, node, &hslot->head, offset) {
+        // zhou: check destination Interface in Linux 4.x.
 		if (!__udp_is_mcast_sock(net, sk, uh->dest, daddr,
 					 uh->source, saddr, dif, sdif, hnum))
 			continue;
@@ -2319,6 +2337,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		return ret;
 	}
 
+    // zhou: UDP support multicast/broadcast at the same time
 	if (rt->rt_flags & (RTCF_BROADCAST|RTCF_MULTICAST))
 		return __udp4_lib_mcast_deliver(net, skb, uh,
 						saddr, daddr, udptable, proto);
@@ -2336,6 +2355,8 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		goto csum_error;
 
 	__UDP_INC_STATS(net, UDP_MIB_NOPORTS, proto == IPPROTO_UDPLITE);
+
+    // zhou: can't find Socket bind to this UDP Port
 	icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 
 	/*
@@ -2426,6 +2447,7 @@ static struct sock *__udp4_lib_demux_lookup(struct net *net,
 	return NULL;
 }
 
+// zhou: find which application's socket should handle this packet
 int udp_v4_early_demux(struct sk_buff *skb)
 {
 	struct net *net = dev_net(skb->dev);
@@ -2769,6 +2791,10 @@ int udp_abort(struct sock *sk, int err)
 }
 EXPORT_SYMBOL_GPL(udp_abort);
 
+// zhou: this callback functions are invoked by "struct socket" which located in INET layer.
+//       To mapping to specific L4 operations. The common VFS can't support "socketfs"
+//       specific operation, then these operations will fall here.
+//       L4 Layer operations.
 struct proto udp_prot = {
 	.name			= "UDP",
 	.owner			= THIS_MODULE,
@@ -3056,8 +3082,11 @@ void __init udp_init(void)
 	unsigned int i;
 
 	udp_table_init(&udp_table, "UDP");
+
+    // zhou: depend on system memory size.
 	limit = nr_free_buffer_pages() / 8;
 	limit = max(limit, 128UL);
+
 	sysctl_udp_mem[0] = limit / 4 * 3;
 	sysctl_udp_mem[1] = limit;
 	sysctl_udp_mem[2] = sysctl_udp_mem[0] * 2;

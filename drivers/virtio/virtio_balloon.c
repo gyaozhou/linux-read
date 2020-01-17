@@ -54,6 +54,7 @@ enum virtio_balloon_config_read {
 	VIRTIO_BALLOON_CONFIG_READ_CMD_ID = 0,
 };
 
+// zhou:
 struct virtio_balloon {
 	struct virtio_device *vdev;
 	struct virtqueue *inflate_vq, *deflate_vq, *stats_vq, *free_page_vq;
@@ -109,6 +110,7 @@ struct virtio_balloon {
 	unsigned int num_pfns;
 	__virtio32 pfns[VIRTIO_BALLOON_ARRAY_PFNS_MAX];
 
+    // zhou: guest memory usage
 	/* Memory statistics */
 	struct virtio_balloon_stat stats[VIRTIO_BALLOON_S_NR];
 
@@ -277,6 +279,7 @@ static inline void update_stat(struct virtio_balloon *vb, int idx,
 
 #define pages_to_bytes(x) ((u64)(x) << PAGE_SHIFT)
 
+// zhou: collect guest OS memory usage.
 static unsigned int update_balloon_stats(struct virtio_balloon *vb)
 {
 	unsigned long events[NR_VM_EVENT_ITEMS];
@@ -317,6 +320,7 @@ static unsigned int update_balloon_stats(struct virtio_balloon *vb)
 	return idx;
 }
 
+// zhou: README,
 /*
  * While most virtqueues communicate guest-initiated requests to the hypervisor,
  * the stats queue operates in reverse.  The driver initializes the virtqueue
@@ -428,6 +432,7 @@ static void update_balloon_size(struct virtio_balloon *vb)
 		      &actual);
 }
 
+// zhou: README, handle request from hypervisor to collect memory usage???
 static void update_balloon_stats_func(struct work_struct *work)
 {
 	struct virtio_balloon *vb;
@@ -437,6 +442,7 @@ static void update_balloon_stats_func(struct work_struct *work)
 	stats_handle_request(vb);
 }
 
+// zhou: README, handle request from hypervisor to change memory size.
 static void update_balloon_size_func(struct work_struct *work)
 {
 	struct virtio_balloon *vb;
@@ -857,6 +863,7 @@ static int virtio_balloon_register_shrinker(struct virtio_balloon *vb)
 	return register_shrinker(&vb->shrinker);
 }
 
+// zhou:
 static int virtballoon_probe(struct virtio_device *vdev)
 {
 	struct virtio_balloon *vb;
@@ -877,6 +884,7 @@ static int virtballoon_probe(struct virtio_device *vdev)
 
 	INIT_WORK(&vb->update_balloon_stats_work, update_balloon_stats_func);
 	INIT_WORK(&vb->update_balloon_size_work, update_balloon_size_func);
+
 	spin_lock_init(&vb->stop_update_lock);
 	mutex_init(&vb->balloon_lock);
 	init_waitqueue_head(&vb->acked);

@@ -233,6 +233,8 @@ struct inet_sock {
 	__u8			convert_csum;
 	int			uc_index;
 	int			mc_index;
+
+    // zhou: NOT MCAST IP, used by MCAST as source IP.
 	__be32			mc_addr;
 	struct ip_mc_socklist __rcu	*mc_list;
 	struct inet_cork_full	cork;

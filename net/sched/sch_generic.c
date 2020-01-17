@@ -282,6 +282,7 @@ trace:
  *				false  - hardware queue frozen backoff
  *				true   - feel free to send more pkts
  */
+// zhou:
 bool sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
 		     struct net_device *dev, struct netdev_queue *txq,
 		     spinlock_t *root_lock, bool validate)
@@ -503,6 +504,7 @@ EXPORT_SYMBOL(netif_carrier_on);
  *
  * Device has detected loss of carrier.
  */
+// zhou: set the carrier state off by network driver.
 void netif_carrier_off(struct net_device *dev)
 {
 	if (!test_and_set_bit(__LINK_STATE_NOCARRIER, &dev->state)) {

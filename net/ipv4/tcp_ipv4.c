@@ -1605,6 +1605,7 @@ csum_err:
 }
 EXPORT_SYMBOL(tcp_v4_do_rcv);
 
+// zhou: find which application's socket should handle this packet
 int tcp_v4_early_demux(struct sk_buff *skb)
 {
 	const struct iphdr *iph;

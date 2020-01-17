@@ -1270,6 +1270,7 @@ static void handle_rx_net(struct vhost_work *work)
 	handle_rx(net);
 }
 
+// zhou:
 static int vhost_net_open(struct inode *inode, struct file *f)
 {
 	struct vhost_net *n;
@@ -1677,6 +1678,7 @@ out_unlock:
 	return -EFAULT;
 }
 
+// zhou:
 static long vhost_net_set_owner(struct vhost_net *n)
 {
 	int r;
@@ -1698,6 +1700,7 @@ out:
 	return r;
 }
 
+// zhou:
 static long vhost_net_ioctl(struct file *f, unsigned int ioctl,
 			    unsigned long arg)
 {
@@ -1771,6 +1774,7 @@ static ssize_t vhost_net_chr_write_iter(struct kiocb *iocb,
 	return vhost_chr_write_iter(dev, from);
 }
 
+// zhou:
 static __poll_t vhost_net_chr_poll(struct file *file, poll_table *wait)
 {
 	struct vhost_net *n = file->private_data;
@@ -1793,14 +1797,17 @@ static const struct file_operations vhost_net_fops = {
 
 static struct miscdevice vhost_net_misc = {
 	.minor = VHOST_NET_MINOR,
+    // zhou: /dev/vhost-net
 	.name = "vhost-net",
 	.fops = &vhost_net_fops,
 };
 
+// zhou: README, create device /dev/vhost-net
 static int vhost_net_init(void)
 {
 	if (experimental_zcopytx)
 		vhost_net_enable_zcopy(VHOST_NET_VQ_TX);
+
 	return misc_register(&vhost_net_misc);
 }
 module_init(vhost_net_init);

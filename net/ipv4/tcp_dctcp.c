@@ -247,6 +247,7 @@ static void __exit dctcp_unregister(void)
 	tcp_unregister_congestion_control(&dctcp);
 }
 
+// zhou: README
 module_init(dctcp_register);
 module_exit(dctcp_unregister);
 

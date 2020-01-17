@@ -320,6 +320,8 @@ struct bpf_sk_storage;
   *	@sk_txtime_deadline_mode: set deadline mode for SO_TXTIME
   *	@sk_txtime_unused: unused txtime flags
   */
+// zhou: VFS Layer "struct file" <---> INET Layer "struct socket" <---> Network Layer "struct sock"
+//       Network Layer means "protocol family(PF_XXX)" here.
 struct sock {
 	/*
 	 * Now struct inet_timewait_sock also uses sock_common, so please just
@@ -392,6 +394,7 @@ struct sock {
 
 	struct sk_filter __rcu	*sk_filter;
 	union {
+        // zhou: wait queue for select/poll/epoll
 		struct socket_wq __rcu	*sk_wq;
 		struct socket_wq	*sk_wq_raw;
 	};
@@ -471,6 +474,8 @@ struct sock {
 	kuid_t			sk_uid;
 	struct pid		*sk_peer_pid;
 	const struct cred	*sk_peer_cred;
+
+    // zhou: set by SO_RCVTIMEO/SO_SNDTIMEO
 	long			sk_rcvtimeo;
 	ktime_t			sk_stamp;
 #if BITS_PER_LONG==32
@@ -1065,9 +1070,13 @@ static inline void sk_prot_clear_nulls(struct sock *sk, int size)
 	       size - offsetof(struct sock, sk_node.pprev));
 }
 
+// zhou: "struct proto", attached to "struct sock" which represent INET_Layer.
+//       It's easy to understand that these callback functions related with socket operation.
+
 /* Networking protocol blocks we attach to sockets.
  * socket layer -> transport layer interface
  */
+
 struct proto {
 	void			(*close)(struct sock *sk,
 					long timeout);
@@ -1176,6 +1185,7 @@ struct proto {
 
 	struct module		*owner;
 
+    // zhou: PF_XXX
 	char			name[32];
 
 	struct list_head	node;

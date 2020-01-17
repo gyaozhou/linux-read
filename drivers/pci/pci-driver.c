@@ -284,6 +284,7 @@ struct drv_dev_and_id {
 	const struct pci_device_id *id;
 };
 
+// zhou: NUMA locality
 static long local_pci_probe(void *_ddi)
 {
 	struct drv_dev_and_id *ddi = _ddi;
@@ -303,6 +304,8 @@ static long local_pci_probe(void *_ddi)
 	 */
 	pm_runtime_get_sync(dev);
 	pci_dev->driver = pci_drv;
+
+    // zhou: invoke PCI driver's probe(), such as igb_probe()
 	rc = pci_drv->probe(pci_dev, ddi->id);
 	if (!rc)
 		return rc;
@@ -1386,6 +1389,7 @@ static const struct dev_pm_ops pci_dev_pm_ops = {
 
 #endif /* !CONFIG_PM */
 
+// zhou: register PCI device driver to "PCI Core", then register to "Driver Core"
 /**
  * __pci_register_driver - register a new pci driver
  * @drv: the driver structure to register
@@ -1402,6 +1406,7 @@ int __pci_register_driver(struct pci_driver *drv, struct module *owner,
 {
 	/* initialize common driver fields */
 	drv->driver.name = drv->name;
+    // zhou: connect PCI device driver to PCI core.
 	drv->driver.bus = &pci_bus_type;
 	drv->driver.owner = owner;
 	drv->driver.mod_name = mod_name;
@@ -1410,6 +1415,7 @@ int __pci_register_driver(struct pci_driver *drv, struct module *owner,
 	spin_lock_init(&drv->dynids.lock);
 	INIT_LIST_HEAD(&drv->dynids.list);
 
+    // zhou: register driver with bus
 	/* register with core */
 	return driver_register(&drv->driver);
 }
@@ -1619,8 +1625,13 @@ static int pci_dma_configure(struct device *dev)
 
 struct bus_type pci_bus_type = {
 	.name		= "pci",
+
+    // zhou: Used by a driver to check whether a PCI device present in the system is in its list
+    //       of supported devices.
+
 	.match		= pci_bus_match,
 	.uevent		= pci_uevent,
+    // zhou: opposite of .match, invoked by platform to check are there suitable driver.
 	.probe		= pci_device_probe,
 	.remove		= pci_device_remove,
 	.shutdown	= pci_device_shutdown,

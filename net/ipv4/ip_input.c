@@ -192,6 +192,7 @@ void ip_protocol_deliver_rcu(struct net *net, struct sk_buff *skb, int protocol)
 resubmit:
 	raw = raw_local_deliver(skb, protocol);
 
+        // zhou: got "struct net_protocol"
 	ipprot = rcu_dereference(inet_protos[protocol]);
 	if (ipprot) {
 		if (!ipprot->no_policy) {
@@ -237,6 +238,7 @@ static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_b
 /*
  * 	Deliver IP Packets to the higher protocol layers.
  */
+// zhou: this function will be invoked by Routing System's final step(dst.input).
 int ip_local_deliver(struct sk_buff *skb)
 {
 	/*
@@ -249,6 +251,8 @@ int ip_local_deliver(struct sk_buff *skb)
 			return 0;
 	}
 
+    // zhou: the packet have been decided to be handled by local, before hand over
+    //       to higher layer.
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN,
 		       net, NULL, skb, skb->dev, NULL,
 		       ip_local_deliver_finish);
