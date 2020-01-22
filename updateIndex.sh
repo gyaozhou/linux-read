@@ -56,12 +56,16 @@ find drivers/base -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope
 
 find drivers/scsi -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find drivers/md -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+
+find drivers/block/brd.c -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find drivers/block/loop.c -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+find drivers/block/nbd.c -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+find drivers/block/rbd.c -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find drivers/block/virtio_blk.c -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find drivers/block/drbd -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 
-find drivers/block/xen-blkback -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
-find drivers/block/xen-blkfront.c -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+#find drivers/block/xen-blkback -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+#find drivers/block/xen-blkfront.c -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 
 find drivers/nvme -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 
@@ -89,7 +93,7 @@ find net/netlink -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.
 find net/openvswitch -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find net/sched -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find net/sctp -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
-find net/vmw_vsock/ -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+find net/vmw_vsock -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find net/tls -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find net/unix -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find net/dcb -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
