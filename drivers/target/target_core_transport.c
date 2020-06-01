@@ -1861,6 +1861,7 @@ void transport_generic_request_failure(struct se_cmd *cmd,
 		cmd->scsi_status = SAM_STAT_TASK_SET_FULL;
 		goto queue_status;
 	case TCM_LUN_BUSY:
+        // zhou:
 		cmd->scsi_status = SAM_STAT_BUSY;
 		goto queue_status;
 	case TCM_RESERVATION_CONFLICT:

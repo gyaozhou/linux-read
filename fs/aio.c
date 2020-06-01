@@ -1483,6 +1483,7 @@ static int aio_prep_rw(struct kiocb *req, const struct iocb *iocb)
 	return 0;
 }
 
+// zhou:
 static ssize_t aio_setup_rw(int rw, const struct iocb *iocb,
 		struct iovec **iovec, bool vectored, bool compat,
 		struct iov_iter *iter)
@@ -1500,6 +1501,7 @@ static ssize_t aio_setup_rw(int rw, const struct iocb *iocb,
 		return compat_import_iovec(rw, buf, len, UIO_FASTIOV, iovec,
 				iter);
 #endif
+    // zhou: handle iovect in AIO
 	return import_iovec(rw, buf, len, UIO_FASTIOV, iovec, iter);
 }
 
@@ -1523,6 +1525,7 @@ static inline void aio_rw_done(struct kiocb *req, ssize_t ret)
 	}
 }
 
+// zhou:
 static int aio_read(struct kiocb *req, const struct iocb *iocb,
 			bool vectored, bool compat)
 {

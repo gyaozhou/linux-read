@@ -190,6 +190,7 @@ struct scsi_varlen_cdb_hdr {
  *  SCSI Architecture Model (SAM) Status codes. Taken from SAM-3 draft
  *  T10/1561-D Revision 4 Draft dated 7th November 2002.
  */
+// zhou: !!!
 #define SAM_STAT_GOOD            0x00
 #define SAM_STAT_CHECK_CONDITION 0x02
 #define SAM_STAT_CONDITION_MET   0x04

@@ -15,6 +15,7 @@ find fs/notify -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.fi
 find fs/kernfs -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find fs/hostfs -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find fs/ext4 -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+find fs/xfs -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find fs/ceph -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find fs/fuse -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find fs/hugetlbfs -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
@@ -29,7 +30,7 @@ find init -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find include -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 
 find kernel -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
-#find lib -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
+find lib -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 find mm -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope.files
 
 
@@ -103,3 +104,8 @@ find tools/virtio -type f \( -name "*.[ch]" -o -name "*.cpp" \) -print >> cscope
 
 cscope -b
 date
+
+
+#mv cscope.files cscope.files.bak
+#sed -e '/flashlibs/d;/memcached/d;/UnitTest/d;/\/test\//d' cscope.files.bak > cscope.files
+#rm -f cscope.files.bak

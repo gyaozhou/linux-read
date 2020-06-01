@@ -1156,6 +1156,7 @@ static const struct target_core_fabric_ops loop_ops = {
 	.tfc_tpg_attrib_attrs		= tcm_loop_tpg_attrib_attrs,
 };
 
+// zhou: scsi loop device, tcm_loop.
 static int __init tcm_loop_fabric_init(void)
 {
 	int ret = -ENOMEM;

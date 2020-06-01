@@ -277,6 +277,7 @@ static const struct kernel_param_ops tcmu_block_netlink_op = {
 	.get = tcmu_get_block_netlink,
 };
 
+// zhou:
 module_param_cb(block_netlink, &tcmu_block_netlink_op, NULL, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(block_netlink, "Block new netlink commands.");
 
@@ -1406,7 +1407,7 @@ static struct se_device *tcmu_alloc_device(struct se_hba *hba, const char *name)
 
 	return &udev->se_dev;
 }
-
+// zhou: README,
 static bool run_qfull_queue(struct tcmu_dev *udev, bool fail)
 {
 	struct tcmu_cmd *tcmu_cmd, *tmp_cmd;
@@ -1926,6 +1927,7 @@ static int tcmu_configure_device(struct se_device *dev)
 	info->open = tcmu_open;
 	info->release = tcmu_release;
 
+    // zhou:
 	ret = uio_register_device(tcmu_root_device, info);
 	if (ret)
 		goto err_register;
@@ -2011,7 +2013,7 @@ static void tcmu_unblock_dev(struct tcmu_dev *udev)
 	clear_bit(TCMU_DEV_BIT_BLOCKED, &udev->flags);
 	mutex_unlock(&udev->cmdr_lock);
 }
-
+// zhou: README,
 static void tcmu_block_dev(struct tcmu_dev *udev)
 {
 	mutex_lock(&udev->cmdr_lock);
@@ -2027,7 +2029,7 @@ static void tcmu_block_dev(struct tcmu_dev *udev)
 unlock:
 	mutex_unlock(&udev->cmdr_lock);
 }
-
+// zhou: README,
 static void tcmu_reset_ring(struct tcmu_dev *udev, u8 err_level)
 {
 	struct tcmu_mailbox *mb;
@@ -2084,6 +2086,7 @@ enum {
 	Opt_nl_reply_supported, Opt_max_data_area_mb, Opt_err,
 };
 
+// zhou: configuration for block device.
 static match_table_t tokens = {
 	{Opt_dev_config, "dev_config=%s"},
 	{Opt_dev_size, "dev_size=%s"},

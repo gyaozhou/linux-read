@@ -683,6 +683,7 @@ static struct nvmf_transport_ops nvme_loop_transport = {
 	.allowed_opts	= NVMF_OPT_TRADDR,
 };
 
+// zhou: nvme loop device.
 static int __init nvme_loop_init_module(void)
 {
 	int ret;
