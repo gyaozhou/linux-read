@@ -21,6 +21,7 @@
 union perf_event;
 struct perf_session;
 struct evlist;
+struct evsel;
 struct perf_tool;
 struct mmap;
 struct perf_sample;
@@ -29,6 +30,7 @@ struct record_opts;
 struct perf_record_auxtrace_error;
 struct perf_record_auxtrace_info;
 struct events_stats;
+struct perf_pmu;
 
 enum auxtrace_error_type {
        PERF_AUXTRACE_ERROR_ITRACE  = 1,
@@ -72,8 +74,10 @@ enum itrace_period_type {
  * @calls: limit branch samples to calls (can be combined with @returns)
  * @returns: limit branch samples to returns (can be combined with @calls)
  * @callchain: add callchain to 'instructions' events
+ * @add_callchain: add callchain to existing event records
  * @thread_stack: feed branches to the thread_stack
  * @last_branch: add branch context to 'instruction' events
+ * @add_last_branch: add branch context to existing event records
  * @callchain_sz: maximum callchain size
  * @last_branch_sz: branch context size
  * @period: 'instructions' events period
@@ -99,8 +103,10 @@ struct itrace_synth_opts {
 	bool			calls;
 	bool			returns;
 	bool			callchain;
+	bool			add_callchain;
 	bool			thread_stack;
 	bool			last_branch;
+	bool			add_last_branch;
 	unsigned int		callchain_sz;
 	unsigned int		last_branch_sz;
 	unsigned long long	period;
@@ -165,6 +171,8 @@ struct auxtrace {
 			    struct perf_tool *tool);
 	void (*free_events)(struct perf_session *session);
 	void (*free)(struct perf_session *session);
+	bool (*evsel_is_auxtrace)(struct perf_session *session,
+				  struct evsel *evsel);
 };
 
 /**
@@ -322,6 +330,8 @@ struct auxtrace_mmap_params {
  * @read_finish: called after reading from an auxtrace mmap
  * @alignment: alignment (if any) for AUX area data
  * @default_aux_sample_size: default sample size for --aux sample option
+ * @pmu: associated pmu
+ * @evlist: selected events list
  */
 struct auxtrace_record {
 	int (*recording_options)(struct auxtrace_record *itr,
@@ -346,6 +356,8 @@ struct auxtrace_record {
 	int (*read_finish)(struct auxtrace_record *itr, int idx);
 	unsigned int alignment;
 	unsigned int default_aux_sample_size;
+	struct perf_pmu *pmu;
+	struct evlist *evlist;
 };
 
 /**
@@ -537,6 +549,7 @@ int auxtrace_record__find_snapshot(struct auxtrace_record *itr, int idx,
 				   struct auxtrace_mmap *mm,
 				   unsigned char *data, u64 *head, u64 *old);
 u64 auxtrace_record__reference(struct auxtrace_record *itr);
+int auxtrace_record__read_finish(struct auxtrace_record *itr, int idx);
 
 int auxtrace_index__auxtrace_event(struct list_head *head, union perf_event *event,
 				   off_t file_offset);
@@ -578,6 +591,8 @@ void auxtrace__dump_auxtrace_sample(struct perf_session *session,
 int auxtrace__flush_events(struct perf_session *session, struct perf_tool *tool);
 void auxtrace__free_events(struct perf_session *session);
 void auxtrace__free(struct perf_session *session);
+bool auxtrace__evsel_is_auxtrace(struct perf_session *session,
+				 struct evsel *evsel);
 
 #define ITRACE_HELP \
 "				i:	    		synthesize instructions events\n"		\
@@ -741,6 +756,13 @@ int auxtrace_index__process(int fd __maybe_unused,
 static inline
 void auxtrace_index__free(struct list_head *head __maybe_unused)
 {
+}
+
+static inline
+bool auxtrace__evsel_is_auxtrace(struct perf_session *session __maybe_unused,
+				 struct evsel *evsel __maybe_unused)
+{
+	return false;
 }
 
 static inline

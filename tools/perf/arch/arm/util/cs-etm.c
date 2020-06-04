@@ -23,6 +23,7 @@
 #include "../../util/event.h"
 #include "../../util/evlist.h"
 #include "../../util/evsel.h"
+#include "../../util/perf_api_probe.h"
 #include "../../util/evsel_config.h"
 #include "../../util/pmu.h"
 #include "../../util/cs-etm.h"
@@ -226,13 +227,13 @@ static int cs_etm_set_sink_attr(struct perf_pmu *pmu,
 		if (term->type != PERF_EVSEL__CONFIG_TERM_DRV_CFG)
 			continue;
 
-		sink = term->val.drv_cfg;
+		sink = term->val.str;
 		snprintf(path, PATH_MAX, "sinks/%s", sink);
 
 		ret = perf_pmu__scan_file(pmu, path, "%x", &hash);
 		if (ret != 1) {
 			pr_err("failed to set sink \"%s\" on event %s with %d (%s)\n",
-			       sink, perf_evsel__name(evsel), errno,
+			       sink, evsel__name(evsel), errno,
 			       str_error_r(errno, msg, sizeof(msg)));
 			return ret;
 		}
@@ -401,7 +402,7 @@ static int cs_etm_recording_options(struct auxtrace_record *itr,
 	 * when a context switch happened.
 	 */
 	if (!perf_cpu_map__empty(cpus)) {
-		perf_evsel__set_sample_bit(cs_etm_evsel, CPU);
+		evsel__set_sample_bit(cs_etm_evsel, CPU);
 
 		err = cs_etm_set_option(itr, cs_etm_evsel,
 					ETM_OPT_CTXTID | ETM_OPT_TS);
@@ -425,7 +426,7 @@ static int cs_etm_recording_options(struct auxtrace_record *itr,
 
 		/* In per-cpu case, always need the time of mmap events etc */
 		if (!perf_cpu_map__empty(cpus))
-			perf_evsel__set_sample_bit(tracking_evsel, TIME);
+			evsel__set_sample_bit(tracking_evsel, TIME);
 	}
 
 out:
@@ -858,21 +859,6 @@ static void cs_etm_recording_free(struct auxtrace_record *itr)
 	free(ptr);
 }
 
-static int cs_etm_read_finish(struct auxtrace_record *itr, int idx)
-{
-	struct cs_etm_recording *ptr =
-			container_of(itr, struct cs_etm_recording, itr);
-	struct evsel *evsel;
-
-	evlist__for_each_entry(ptr->evlist, evsel) {
-		if (evsel->core.attr.type == ptr->cs_etm_pmu->type)
-			return perf_evlist__enable_event_idx(ptr->evlist,
-							     evsel, idx);
-	}
-
-	return -EINVAL;
-}
-
 struct auxtrace_record *cs_etm_record_init(int *err)
 {
 	struct perf_pmu *cs_etm_pmu;
@@ -892,6 +878,7 @@ struct auxtrace_record *cs_etm_record_init(int *err)
 	}
 
 	ptr->cs_etm_pmu			= cs_etm_pmu;
+	ptr->itr.pmu			= cs_etm_pmu;
 	ptr->itr.parse_snapshot_options	= cs_etm_parse_snapshot_options;
 	ptr->itr.recording_options	= cs_etm_recording_options;
 	ptr->itr.info_priv_size		= cs_etm_info_priv_size;
@@ -901,7 +888,7 @@ struct auxtrace_record *cs_etm_record_init(int *err)
 	ptr->itr.snapshot_finish	= cs_etm_snapshot_finish;
 	ptr->itr.reference		= cs_etm_reference;
 	ptr->itr.free			= cs_etm_recording_free;
-	ptr->itr.read_finish		= cs_etm_read_finish;
+	ptr->itr.read_finish		= auxtrace_record__read_finish;
 
 	*err = 0;
 	return &ptr->itr;

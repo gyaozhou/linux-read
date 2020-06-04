@@ -267,42 +267,9 @@ static void unuse_table(struct ctl_table_header *p)
 			complete(p->unregistering);
 }
 
-static void proc_sys_prune_dcache(struct ctl_table_header *head)
+static void proc_sys_invalidate_dcache(struct ctl_table_header *head)
 {
-	struct inode *inode;
-	struct proc_inode *ei;
-	struct hlist_node *node;
-	struct super_block *sb;
-
-	rcu_read_lock();
-	for (;;) {
-		node = hlist_first_rcu(&head->inodes);
-		if (!node)
-			break;
-		ei = hlist_entry(node, struct proc_inode, sysctl_inodes);
-		spin_lock(&sysctl_lock);
-		hlist_del_init_rcu(&ei->sysctl_inodes);
-		spin_unlock(&sysctl_lock);
-
-		inode = &ei->vfs_inode;
-		sb = inode->i_sb;
-		if (!atomic_inc_not_zero(&sb->s_active))
-			continue;
-		inode = igrab(inode);
-		rcu_read_unlock();
-		if (unlikely(!inode)) {
-			deactivate_super(sb);
-			rcu_read_lock();
-			continue;
-		}
-
-		d_prune_aliases(inode);
-		iput(inode);
-		deactivate_super(sb);
-
-		rcu_read_lock();
-	}
-	rcu_read_unlock();
+	proc_invalidate_siblings_dcache(&head->inodes, &sysctl_lock);
 }
 
 /* called under sysctl_lock, will reacquire if has to wait */
@@ -324,10 +291,10 @@ static void start_unregistering(struct ctl_table_header *p)
 		spin_unlock(&sysctl_lock);
 	}
 	/*
-	 * Prune dentries for unregistered sysctls: namespaced sysctls
+	 * Invalidate dentries for unregistered sysctls: namespaced sysctls
 	 * can have duplicate names and contaminate dcache very badly.
 	 */
-	proc_sys_prune_dcache(p);
+	proc_sys_invalidate_dcache(p);
 	/*
 	 * do not remove from the list until nobody holds it; walking the
 	 * list in do_sysctl() relies on that.
@@ -483,7 +450,7 @@ static struct inode *proc_sys_make_inode(struct super_block *sb,
 	}
 	ei->sysctl = head;
 	ei->sysctl_entry = table;
-	hlist_add_head_rcu(&ei->sysctl_inodes, &head->inodes);
+	hlist_add_head_rcu(&ei->sibling_inodes, &head->inodes);
 	head->count++;
 	spin_unlock(&sysctl_lock);
 
@@ -514,7 +481,7 @@ static struct inode *proc_sys_make_inode(struct super_block *sb,
 void proc_sys_evict_inode(struct inode *inode, struct ctl_table_header *head)
 {
 	spin_lock(&sysctl_lock);
-	hlist_del_init_rcu(&PROC_I(inode)->sysctl_inodes);
+	hlist_del_init_rcu(&PROC_I(inode)->sibling_inodes);
 	if (!--head->count)
 		kfree_rcu(head, rcu);
 	spin_unlock(&sysctl_lock);
@@ -572,13 +539,13 @@ out:
 	return err;
 }
 
-static ssize_t proc_sys_call_handler(struct file *filp, void __user *buf,
+static ssize_t proc_sys_call_handler(struct file *filp, void __user *ubuf,
 		size_t count, loff_t *ppos, int write)
 {
 	struct inode *inode = file_inode(filp);
 	struct ctl_table_header *head = grab_header(inode);
 	struct ctl_table *table = PROC_I(inode)->sysctl_entry;
-	void *new_buf = NULL;
+	void *kbuf;
 	ssize_t error;
 
 	if (IS_ERR(head))
@@ -597,27 +564,38 @@ static ssize_t proc_sys_call_handler(struct file *filp, void __user *buf,
 	if (!table->proc_handler)
 		goto out;
 
-	error = BPF_CGROUP_RUN_PROG_SYSCTL(head, table, write, buf, &count,
-					   ppos, &new_buf);
-	if (error)
-		goto out;
-
-	/* careful: calling conventions are nasty here */
-	if (new_buf) {
-		mm_segment_t old_fs;
-
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
-		error = table->proc_handler(table, write, (void __user *)new_buf,
-					    &count, ppos);
-		set_fs(old_fs);
-		kfree(new_buf);
+	if (write) {
+		kbuf = memdup_user_nul(ubuf, count);
+		if (IS_ERR(kbuf)) {
+			error = PTR_ERR(kbuf);
+			goto out;
+		}
 	} else {
-		error = table->proc_handler(table, write, buf, &count, ppos);
+		error = -ENOMEM;
+		kbuf = kzalloc(count, GFP_KERNEL);
+		if (!kbuf)
+			goto out;
 	}
 
-	if (!error)
-		error = count;
+	error = BPF_CGROUP_RUN_PROG_SYSCTL(head, table, write, &kbuf, &count,
+					   ppos);
+	if (error)
+		goto out_free_buf;
+
+	/* careful: calling conventions are nasty here */
+	error = table->proc_handler(table, write, kbuf, &count, ppos);
+	if (error)
+		goto out_free_buf;
+
+	if (!write) {
+		error = -EFAULT;
+		if (copy_to_user(ubuf, kbuf, count))
+			goto out_free_buf;
+	}
+
+	error = count;
+out_free_buf:
+	kfree(kbuf);
 out:
 	sysctl_head_finish(head);
 
@@ -1720,7 +1698,7 @@ int __init proc_sys_init(void)
 
 	proc_sys_root = proc_mkdir("sys", NULL);
 	proc_sys_root->proc_iops = &proc_sys_dir_operations;
-	proc_sys_root->proc_fops = &proc_sys_dir_file_operations;
+	proc_sys_root->proc_dir_ops = &proc_sys_dir_file_operations;
 	proc_sys_root->nlink = 0;
 
 	return sysctl_init();

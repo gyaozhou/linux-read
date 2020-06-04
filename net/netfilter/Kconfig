@@ -455,14 +455,6 @@ config NF_TABLES
 	  To compile it as a module, choose M here.
 
 if NF_TABLES
-
-config NF_TABLES_SET
-	tristate "Netfilter nf_tables set infrastructure"
-	help
-	  This option enables the nf_tables set infrastructure that allows to
-	  look up for elements in a set and to build one-way mappings between
-	  matchings and actions.
-
 config NF_TABLES_INET
 	depends on IPV6
 	select NF_TABLES_IPV4
@@ -1051,7 +1043,7 @@ config NETFILTER_XT_TARGET_TPROXY
 	  on Netfilter connection tracking and NAT, unlike REDIRECT.
 	  For it to work you will have to configure certain iptables rules
 	  and use policy routing. For more information on how to set it up
-	  see Documentation/networking/tproxy.txt.
+	  see Documentation/networking/tproxy.rst.
 
 	  To compile it as a module, choose M here.  If unsure, say N.
 

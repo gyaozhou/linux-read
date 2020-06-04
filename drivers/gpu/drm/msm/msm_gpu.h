@@ -57,7 +57,7 @@ struct msm_gpu_funcs {
 	void (*show)(struct msm_gpu *gpu, struct msm_gpu_state *state,
 			struct drm_printer *p);
 	/* for generation specific debugfs: */
-	int (*debugfs_init)(struct msm_gpu *gpu, struct drm_minor *minor);
+	void (*debugfs_init)(struct msm_gpu *gpu, struct drm_minor *minor);
 #endif
 	unsigned long (*gpu_busy)(struct msm_gpu *gpu);
 	struct msm_gpu_state *(*gpu_state_get)(struct msm_gpu *gpu);
@@ -111,7 +111,14 @@ struct msm_gpu {
 	struct clk *ebi1_clk, *core_clk, *rbbmtimer_clk;
 	uint32_t fast_rate;
 
+	/* The gfx-mem interconnect path that's used by all GPU types. */
 	struct icc_path *icc_path;
+
+	/*
+	 * Second interconnect path for some A3xx and all A4xx GPUs to the
+	 * On Chip MEMory (OCMEM).
+	 */
+	struct icc_path *ocmem_icc_path;
 
 	/* Hang and Inactivity Detection:
 	 */

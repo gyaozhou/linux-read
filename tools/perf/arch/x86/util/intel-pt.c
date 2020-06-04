@@ -13,23 +13,24 @@
 #include <linux/zalloc.h>
 #include <cpuid.h>
 
-#include "../../util/session.h"
-#include "../../util/event.h"
-#include "../../util/evlist.h"
-#include "../../util/evsel.h"
-#include "../../util/evsel_config.h"
-#include "../../util/cpumap.h"
-#include "../../util/mmap.h"
+#include "../../../util/session.h"
+#include "../../../util/event.h"
+#include "../../../util/evlist.h"
+#include "../../../util/evsel.h"
+#include "../../../util/evsel_config.h"
+#include "../../../util/cpumap.h"
+#include "../../../util/mmap.h"
 #include <subcmd/parse-options.h>
-#include "../../util/parse-events.h"
-#include "../../util/pmu.h"
-#include "../../util/debug.h"
-#include "../../util/auxtrace.h"
-#include "../../util/record.h"
-#include "../../util/target.h"
-#include "../../util/tsc.h"
+#include "../../../util/parse-events.h"
+#include "../../../util/pmu.h"
+#include "../../../util/debug.h"
+#include "../../../util/auxtrace.h"
+#include "../../../util/perf_api_probe.h"
+#include "../../../util/record.h"
+#include "../../../util/target.h"
+#include "../../../util/tsc.h"
 #include <internal/lib.h> // page_size
-#include "../../util/intel-pt.h"
+#include "../../../util/intel-pt.h"
 
 #define KiB(x) ((x) * 1024)
 #define MiB(x) ((x) * 1024 * 1024)
@@ -420,8 +421,8 @@ static int intel_pt_track_switches(struct evlist *evlist)
 
 	evsel = evlist__last(evlist);
 
-	perf_evsel__set_sample_bit(evsel, CPU);
-	perf_evsel__set_sample_bit(evsel, TIME);
+	evsel__set_sample_bit(evsel, CPU);
+	evsel__set_sample_bit(evsel, TIME);
 
 	evsel->core.system_wide = true;
 	evsel->no_aux_samples = true;
@@ -801,10 +802,10 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 				switch_evsel->no_aux_samples = true;
 				switch_evsel->immediate = true;
 
-				perf_evsel__set_sample_bit(switch_evsel, TID);
-				perf_evsel__set_sample_bit(switch_evsel, TIME);
-				perf_evsel__set_sample_bit(switch_evsel, CPU);
-				perf_evsel__reset_sample_bit(switch_evsel, BRANCH_STACK);
+				evsel__set_sample_bit(switch_evsel, TID);
+				evsel__set_sample_bit(switch_evsel, TIME);
+				evsel__set_sample_bit(switch_evsel, CPU);
+				evsel__reset_sample_bit(switch_evsel, BRANCH_STACK);
 
 				opts->record_switch_events = false;
 				ptr->have_sched_switch = 3;
@@ -838,7 +839,7 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 		 * AUX event.
 		 */
 		if (!perf_cpu_map__empty(cpus))
-			perf_evsel__set_sample_bit(intel_pt_evsel, CPU);
+			evsel__set_sample_bit(intel_pt_evsel, CPU);
 	}
 
 	/* Add dummy event to keep tracking */
@@ -862,11 +863,11 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 
 		/* In per-cpu case, always need the time of mmap events etc */
 		if (!perf_cpu_map__empty(cpus)) {
-			perf_evsel__set_sample_bit(tracking_evsel, TIME);
+			evsel__set_sample_bit(tracking_evsel, TIME);
 			/* And the CPU for switch events */
-			perf_evsel__set_sample_bit(tracking_evsel, CPU);
+			evsel__set_sample_bit(tracking_evsel, CPU);
 		}
-		perf_evsel__reset_sample_bit(tracking_evsel, BRANCH_STACK);
+		evsel__reset_sample_bit(tracking_evsel, BRANCH_STACK);
 	}
 
 	/*
@@ -1166,20 +1167,6 @@ static u64 intel_pt_reference(struct auxtrace_record *itr __maybe_unused)
 	return rdtsc();
 }
 
-static int intel_pt_read_finish(struct auxtrace_record *itr, int idx)
-{
-	struct intel_pt_recording *ptr =
-			container_of(itr, struct intel_pt_recording, itr);
-	struct evsel *evsel;
-
-	evlist__for_each_entry(ptr->evlist, evsel) {
-		if (evsel->core.attr.type == ptr->intel_pt_pmu->type)
-			return perf_evlist__enable_event_idx(ptr->evlist, evsel,
-							     idx);
-	}
-	return -EINVAL;
-}
-
 struct auxtrace_record *intel_pt_recording_init(int *err)
 {
 	struct perf_pmu *intel_pt_pmu = perf_pmu__find(INTEL_PT_PMU_NAME);
@@ -1200,6 +1187,7 @@ struct auxtrace_record *intel_pt_recording_init(int *err)
 	}
 
 	ptr->intel_pt_pmu = intel_pt_pmu;
+	ptr->itr.pmu = intel_pt_pmu;
 	ptr->itr.recording_options = intel_pt_recording_options;
 	ptr->itr.info_priv_size = intel_pt_info_priv_size;
 	ptr->itr.info_fill = intel_pt_info_fill;
@@ -1209,7 +1197,7 @@ struct auxtrace_record *intel_pt_recording_init(int *err)
 	ptr->itr.find_snapshot = intel_pt_find_snapshot;
 	ptr->itr.parse_snapshot_options = intel_pt_parse_snapshot_options;
 	ptr->itr.reference = intel_pt_reference;
-	ptr->itr.read_finish = intel_pt_read_finish;
+	ptr->itr.read_finish = auxtrace_record__read_finish;
 	/*
 	 * Decoding starts at a PSB packet. Minimum PSB period is 2K so 4K
 	 * should give at least 1 PSB per sample.

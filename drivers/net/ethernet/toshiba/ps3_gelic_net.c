@@ -1150,7 +1150,7 @@ static irqreturn_t gelic_card_interrupt(int irq, void *ptr)
  * gelic_net_poll_controller - artificial interrupt for netconsole etc.
  * @netdev: interface device structure
  *
- * see Documentation/networking/netconsole.txt
+ * see Documentation/networking/netconsole.rst
  */
 void gelic_net_poll_controller(struct net_device *netdev)
 {
@@ -1405,7 +1405,7 @@ out:
  *
  * called, if tx hangs. Schedules a task that resets the interface
  */
-void gelic_net_tx_timeout(struct net_device *netdev)
+void gelic_net_tx_timeout(struct net_device *netdev, unsigned int txqueue)
 {
 	struct gelic_card *card;
 
