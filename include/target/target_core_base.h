@@ -113,6 +113,7 @@ enum hba_flags_table {
 };
 
 /* Special transport agnostic struct se_cmd->t_states */
+// zhou: README,
 enum transport_state_table {
 	TRANSPORT_NO_STATE	= 0,
 	TRANSPORT_NEW_CMD	= 1,

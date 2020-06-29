@@ -1409,6 +1409,7 @@ transport_check_alloc_task_attr(struct se_cmd *cmd)
 	return 0;
 }
 
+// zhou: README,
 sense_reason_t
 target_setup_cmd_from_cdb(struct se_cmd *cmd, unsigned char *cdb)
 {
@@ -2543,6 +2544,7 @@ EXPORT_SYMBOL(target_alloc_sgl);
  * might not have the payload yet, so notify the fabric via a call to
  * ->write_pending instead. Otherwise place it on the execution queue.
  */
+// zhou: README, submit IO request
 sense_reason_t
 transport_generic_new_cmd(struct se_cmd *cmd)
 {

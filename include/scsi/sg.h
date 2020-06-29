@@ -40,7 +40,7 @@ typedef struct sg_iovec /* same structure as used by readv() Linux system */
     size_t iov_len;             /* Length in bytes  */
 } sg_iovec_t;
 
-
+// zhou:
 typedef struct sg_io_hdr
 {
     int interface_id;           /* [i] 'S' for SCSI generic (required) */
@@ -65,6 +65,7 @@ typedef struct sg_io_hdr
     unsigned short driver_status;/* [o] errors from software driver */
     int resid;                  /* [o] dxfer_len - actual_transferred */
     unsigned int duration;      /* [o] time taken by cmd (unit: millisec) */
+    // zhou: "info & SG_INFO_OK_MASK" is result.
     unsigned int info;          /* [o] auxiliary information */
 } sg_io_hdr_t;  /* 64 bytes long (on i386) */
 
@@ -100,6 +101,7 @@ struct compat_sg_io_hdr {
 
 #define SG_INTERFACE_ID_ORIG 'S'
 
+// zhou:
 /* Use negative values to flag difference from original sg_header structure */
 #define SG_DXFER_NONE (-1)      /* e.g. a SCSI Test Unit Ready command */
 #define SG_DXFER_TO_DEV (-2)    /* e.g. a SCSI WRITE command */
@@ -215,7 +217,7 @@ typedef struct sg_req_info { /* used by SG_GET_REQUEST_TABLE ioctl() */
 #define SG_GET_KEEP_ORPHAN 0x2288
 
 /* yields scsi midlevel's access_count for this SCSI device */
-#define SG_GET_ACCESS_COUNT 0x2289  
+#define SG_GET_ACCESS_COUNT 0x2289
 
 
 #define SG_SCATTER_SZ (8 * 4096)

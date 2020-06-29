@@ -17,6 +17,7 @@
 struct request_queue;
 struct scatterlist;
 
+// zhou:
 struct target_backend_ops {
 	char name[16];
 	char inquiry_prod[16];

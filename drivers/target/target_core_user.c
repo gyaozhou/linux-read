@@ -253,6 +253,7 @@ static int tcmu_get_block_netlink(char *buffer,
 		       "blocked" : "unblocked");
 }
 
+// zhou:
 static int tcmu_set_block_netlink(const char *str,
 				  const struct kernel_param *kp)
 {
@@ -281,6 +282,7 @@ static const struct kernel_param_ops tcmu_block_netlink_op = {
 module_param_cb(block_netlink, &tcmu_block_netlink_op, NULL, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(block_netlink, "Block new netlink commands.");
 
+// zhou: reset_netlink, just abort all cmd in queue.
 static int tcmu_fail_netlink_cmd(struct tcmu_nl_cmd *nl_cmd)
 {
 	struct tcmu_dev *udev = nl_cmd->udev;
@@ -812,6 +814,7 @@ static inline size_t spc_bitmap_free(unsigned long *bitmap, uint32_t thresh)
  *
  * Called with ring lock held.
  */
+// zhou: README,
 static bool is_ring_space_avail(struct tcmu_dev *udev, struct tcmu_cmd *cmd,
 		size_t cmd_size, size_t data_needed)
 {
@@ -952,6 +955,7 @@ static int add_to_qfull_queue(struct tcmu_cmd *tcmu_cmd)
  *  0 success
  *  1 internally queued to wait for ring memory to free.
  */
+// zhou: README,
 static int queue_cmd_ring(struct tcmu_cmd *tcmu_cmd, sense_reason_t *scsi_err)
 {
 	struct tcmu_dev *udev = tcmu_cmd->tcmu_dev;
@@ -1107,6 +1111,7 @@ queue:
 	return 1;
 }
 
+// zhou:
 static sense_reason_t
 tcmu_queue_cmd(struct se_cmd *se_cmd)
 {
@@ -1128,6 +1133,7 @@ tcmu_queue_cmd(struct se_cmd *se_cmd)
 	return scsi_ret;
 }
 
+// zhou: README,
 static void tcmu_handle_completion(struct tcmu_cmd *cmd, struct tcmu_cmd_entry *entry)
 {
 	struct se_cmd *se_cmd = cmd->se_cmd;
@@ -1407,6 +1413,7 @@ static struct se_device *tcmu_alloc_device(struct se_hba *hba, const char *name)
 
 	return &udev->se_dev;
 }
+
 // zhou: README,
 static bool run_qfull_queue(struct tcmu_dev *udev, bool fail)
 {
@@ -2617,6 +2624,7 @@ static struct configfs_attribute *tcmu_action_attrs[] = {
 	NULL,
 };
 
+// zhou: README,
 static struct target_backend_ops tcmu_ops = {
 	.name			= "user",
 	.owner			= THIS_MODULE,
@@ -2627,6 +2635,7 @@ static struct target_backend_ops tcmu_ops = {
 	.configure_device	= tcmu_configure_device,
 	.destroy_device		= tcmu_destroy_device,
 	.free_device		= tcmu_free_device,
+    // zhou:
 	.parse_cdb		= tcmu_parse_cdb,
 	.set_configfs_dev_params = tcmu_set_configfs_dev_params,
 	.show_configfs_dev_params = tcmu_show_configfs_dev_params,
