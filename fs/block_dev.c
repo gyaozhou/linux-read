@@ -2082,6 +2082,7 @@ static const struct address_space_operations def_blk_aops = {
 		(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE |		\
 		 FALLOC_FL_ZERO_RANGE | FALLOC_FL_NO_HIDE_STALE)
 
+// zhou: README,
 static long blkdev_fallocate(struct file *file, int mode, loff_t start,
 			     loff_t len)
 {

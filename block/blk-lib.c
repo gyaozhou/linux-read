@@ -209,6 +209,7 @@ int blkdev_issue_write_same(struct block_device *bdev, sector_t sector,
 }
 EXPORT_SYMBOL(blkdev_issue_write_same);
 
+// zhou: README,
 static int __blkdev_issue_write_zeroes(struct block_device *bdev,
 		sector_t sector, sector_t nr_sects, gfp_t gfp_mask,
 		struct bio **biop, unsigned flags)
@@ -355,6 +356,7 @@ EXPORT_SYMBOL(__blkdev_issue_zeroout);
  *  writing zeroes to the device.  See __blkdev_issue_zeroout() for the
  *  valid values for %flags.
  */
+// zhou: README,
 int blkdev_issue_zeroout(struct block_device *bdev, sector_t sector,
 		sector_t nr_sects, gfp_t gfp_mask, unsigned flags)
 {

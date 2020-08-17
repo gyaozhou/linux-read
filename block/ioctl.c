@@ -106,6 +106,7 @@ static int blkdev_reread_part(struct block_device *bdev)
 	return ret;
 }
 
+// zhou: README, unmap/trim
 static int blk_ioctl_discard(struct block_device *bdev, fmode_t mode,
 		unsigned long arg, unsigned long flags)
 {
@@ -502,6 +503,7 @@ static int blkdev_common_ioctl(struct block_device *bdev, fmode_t mode,
 	case BLKROSET:
 		return blkdev_roset(bdev, mode, cmd, arg);
 	case BLKDISCARD:
+      // zhou: unmap/trim
 		return blk_ioctl_discard(bdev, mode, arg, 0);
 	case BLKSECDISCARD:
 		return blk_ioctl_discard(bdev, mode, arg,
@@ -595,6 +597,7 @@ int blkdev_ioctl(struct block_device *bdev, fmode_t mode, unsigned cmd,
 			return -EINVAL;
 		return put_long(argp, (bdev->bd_bdi->ra_pages*PAGE_SIZE) / 512);
 	case BLKGETSIZE:
+        // zhou: get block size, in unit of block which size is 512B. So, at most 2TB
 		size = i_size_read(bdev->bd_inode);
 		if ((size >> 9) > ~0UL)
 			return -EFBIG;
@@ -606,6 +609,7 @@ int blkdev_ioctl(struct block_device *bdev, fmode_t mode, unsigned cmd,
 	case BLKBSZSET:
 		return blkdev_bszset(bdev, mode, argp);
 	case BLKGETSIZE64:
+        // zhou: get block size in bytes.
 		return put_u64(argp, i_size_read(bdev->bd_inode));
 
 	/* Incompatible alignment on i386 */

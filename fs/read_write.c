@@ -363,6 +363,7 @@ out_putf:
 }
 #endif
 
+// zhou: README,
 int rw_verify_area(int read_write, struct file *file, const loff_t *ppos, size_t count)
 {
 	struct inode *inode;
