@@ -47,7 +47,7 @@ static struct sample fake_samples[] = {
 };
 
 /*
- * Will be casted to struct ip_callchain which has all 64 bit entries
+ * Will be cast to struct ip_callchain which has all 64 bit entries
  * of nr and ips[].
  */
 static u64 fake_callchains[][10] = {
@@ -190,7 +190,7 @@ static int do_test(struct hists *hists, struct result *expected, size_t nr_expec
 	 * function since TEST_ASSERT_VAL() returns in case of failure.
 	 */
 	hists__collapse_resort(hists, NULL);
-	perf_evsel__output_resort(hists_to_evsel(hists), NULL);
+	evsel__output_resort(hists_to_evsel(hists), NULL);
 
 	if (verbose > 2) {
 		pr_info("use callchain: %d, cumulate callchain: %d\n",
@@ -297,7 +297,7 @@ out:
 	return err;
 }
 
-/* callcain + NO children */
+/* callchain + NO children */
 static int test2(struct evsel *evsel, struct machine *machine)
 {
 	int err;

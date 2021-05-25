@@ -27,7 +27,6 @@
 #include <linux/pagemap.h>
 #include <linux/uaccess.h>
 #include <linux/mem_encrypt.h>
-#include <asm/pgtable.h>
 #include <asm/io.h>
 #include "internal.h"
 
@@ -1504,11 +1503,8 @@ int vmcore_add_device_dump(struct vmcoredd_data *data)
 	return 0;
 
 out_err:
-	if (buf)
-		vfree(buf);
-
-	if (dump)
-		vfree(dump);
+	vfree(buf);
+	vfree(dump);
 
 	return ret;
 }

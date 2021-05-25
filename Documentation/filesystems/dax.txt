@@ -25,7 +25,7 @@ size when creating the filesystem.
 Currently 3 filesystems support DAX: ext2, ext4 and xfs.  Enabling DAX on them
 is different.
 
-Enabling DAX on ext4 and ext2
+Enabling DAX on ext2
 -----------------------------
 
 When mounting the filesystem, use the "-o dax" option on the command line or
@@ -33,8 +33,8 @@ add 'dax' to the options in /etc/fstab.  This works to enable DAX on all files
 within the filesystem.  It is equivalent to the '-o dax=always' behavior below.
 
 
-Enabling DAX on xfs
--------------------
+Enabling DAX on xfs and ext4
+----------------------------
 
 Summary
 -------
@@ -83,20 +83,9 @@ Summary
        directories.  This has runtime constraints and limitations that are
        described in 6) below.
 
- 6. When changing the S_DAX policy via toggling the persistent FS_XFLAG_DAX flag,
-    the change in behaviour for existing regular files may not occur
-    immediately.  If the change must take effect immediately, the administrator
-    needs to:
-
-    a) stop the application so there are no active references to the data set
-       the policy change will affect
-
-    b) evict the data set from kernel caches so it will be re-instantiated when
-       the application is restarted. This can be achieved by:
-
-       i. drop-caches
-       ii. a filesystem unmount and mount cycle
-       iii. a system reboot
+ 6. When changing the S_DAX policy via toggling the persistent FS_XFLAG_DAX
+    flag, the change to existing regular files won't take effect until the
+    files are closed by all processes.
 
 
 Details

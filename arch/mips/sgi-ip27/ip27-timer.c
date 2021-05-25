@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copytight (C) 1999, 2000, 05, 06 Ralf Baechle (ralf@linux-mips.org)
- * Copytight (C) 1999, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 1999, 2000, 05, 06 Ralf Baechle (ralf@linux-mips.org)
+ * Copyright (C) 1999, 2000 Silicon Graphics, Inc.
  */
 #include <linux/bcd.h>
 #include <linux/clockchips.h>
@@ -19,7 +19,6 @@
 #include <linux/platform_device.h>
 
 #include <asm/time.h>
-#include <asm/pgtable.h>
 #include <asm/sgialib.h>
 #include <asm/sn/klconfig.h>
 #include <asm/sn/arch.h>

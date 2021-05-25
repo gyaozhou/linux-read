@@ -60,15 +60,6 @@ struct xdp_dev_bulk_queue {
 	unsigned int count;
 };
 
-/* DEVMAP values */
-struct bpf_devmap_val {
-	u32 ifindex;   /* device index */
-	union {
-		int fd;  /* prog fd on map write */
-		u32 id;  /* prog id on map read */
-	} bpf_prog;
-};
-
 struct bpf_dtab_netdev {
 	struct net_device *dev; /* must be first member, due to tracepoint */
 	struct hlist_node index_hlist;
@@ -95,12 +86,13 @@ static DEFINE_PER_CPU(struct list_head, dev_flush_list);
 static DEFINE_SPINLOCK(dev_map_lock);
 static LIST_HEAD(dev_map_list);
 
-static struct hlist_head *dev_map_create_hash(unsigned int entries)
+static struct hlist_head *dev_map_create_hash(unsigned int entries,
+					      int numa_node)
 {
 	int i;
 	struct hlist_head *hash;
 
-	hash = kmalloc_array(entries, sizeof(*hash), GFP_KERNEL);
+	hash = bpf_map_area_alloc(entries * sizeof(*hash), numa_node);
 	if (hash != NULL)
 		for (i = 0; i < entries; i++)
 			INIT_HLIST_HEAD(&hash[i]);
@@ -117,8 +109,6 @@ static inline struct hlist_head *dev_map_index_hash(struct bpf_dtab *dtab,
 static int dev_map_init_map(struct bpf_dtab *dtab, union bpf_attr *attr)
 {
 	u32 valsize = attr->value_size;
-	u64 cost = 0;
-	int err;
 
 	/* check sanity of attributes. 2 value sizes supported:
 	 * 4 bytes: ifindex
@@ -143,20 +133,13 @@ static int dev_map_init_map(struct bpf_dtab *dtab, union bpf_attr *attr)
 
 		if (!dtab->n_buckets) /* Overflow check */
 			return -EINVAL;
-		cost += (u64) sizeof(struct hlist_head) * dtab->n_buckets;
-	} else {
-		cost += (u64) dtab->map.max_entries * sizeof(struct bpf_dtab_netdev *);
 	}
 
-	/* if map size is larger than memlock limit, reject it */
-	err = bpf_map_charge_init(&dtab->map.memory, cost);
-	if (err)
-		return -EINVAL;
-
 	if (attr->map_type == BPF_MAP_TYPE_DEVMAP_HASH) {
-		dtab->dev_index_head = dev_map_create_hash(dtab->n_buckets);
+		dtab->dev_index_head = dev_map_create_hash(dtab->n_buckets,
+							   dtab->map.numa_node);
 		if (!dtab->dev_index_head)
-			goto free_charge;
+			return -ENOMEM;
 
 		spin_lock_init(&dtab->index_lock);
 	} else {
@@ -164,14 +147,10 @@ static int dev_map_init_map(struct bpf_dtab *dtab, union bpf_attr *attr)
 						      sizeof(struct bpf_dtab_netdev *),
 						      dtab->map.numa_node);
 		if (!dtab->netdev_map)
-			goto free_charge;
+			return -ENOMEM;
 	}
 
 	return 0;
-
-free_charge:
-	bpf_map_charge_finish(&dtab->map.memory);
-	return -ENOMEM;
 }
 
 static struct bpf_map *dev_map_alloc(union bpf_attr *attr)
@@ -182,7 +161,7 @@ static struct bpf_map *dev_map_alloc(union bpf_attr *attr)
 	if (!capable(CAP_NET_ADMIN))
 		return ERR_PTR(-EPERM);
 
-	dtab = kzalloc(sizeof(*dtab), GFP_USER);
+	dtab = kzalloc(sizeof(*dtab), GFP_USER | __GFP_ACCOUNT);
 	if (!dtab)
 		return ERR_PTR(-ENOMEM);
 
@@ -218,7 +197,6 @@ static void dev_map_free(struct bpf_map *map)
 	list_del_rcu(&dtab->list);
 	spin_unlock(&dev_map_lock);
 
-	bpf_clear_redirect_map(map);
 	synchronize_rcu();
 
 	/* Make sure prior __dev_map_entry_free() have completed. */
@@ -241,7 +219,7 @@ static void dev_map_free(struct bpf_map *map)
 			}
 		}
 
-		kfree(dtab->dev_index_head);
+		bpf_map_area_free(dtab->dev_index_head);
 	} else {
 		for (i = 0; i < dtab->map.max_entries; i++) {
 			struct bpf_dtab_netdev *dev;
@@ -279,7 +257,7 @@ static int dev_map_get_next_key(struct bpf_map *map, void *key, void *next_key)
 	return 0;
 }
 
-struct bpf_dtab_netdev *__dev_map_hash_lookup_elem(struct bpf_map *map, u32 key)
+static void *__dev_map_hash_lookup_elem(struct bpf_map *map, u32 key)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
 	struct hlist_head *head = dev_map_index_hash(dtab, key);
@@ -348,14 +326,14 @@ bool dev_map_can_have_prog(struct bpf_map *map)
 	return false;
 }
 
-static int bq_xmit_all(struct xdp_dev_bulk_queue *bq, u32 flags)
+static void bq_xmit_all(struct xdp_dev_bulk_queue *bq, u32 flags)
 {
 	struct net_device *dev = bq->dev;
-	int sent = 0, drops = 0, err = 0;
+	int sent = 0, err = 0;
 	int i;
 
 	if (unlikely(!bq->count))
-		return 0;
+		return;
 
 	for (i = 0; i < bq->count; i++) {
 		struct xdp_frame *xdpf = bq->q[i];
@@ -365,29 +343,23 @@ static int bq_xmit_all(struct xdp_dev_bulk_queue *bq, u32 flags)
 
 	sent = dev->netdev_ops->ndo_xdp_xmit(dev, bq->count, bq->q, flags);
 	if (sent < 0) {
+		/* If ndo_xdp_xmit fails with an errno, no frames have
+		 * been xmit'ed.
+		 */
 		err = sent;
 		sent = 0;
-		goto error;
 	}
-	drops = bq->count - sent;
-out:
-	bq->count = 0;
 
-	trace_xdp_devmap_xmit(bq->dev_rx, dev, sent, drops, err);
-	bq->dev_rx = NULL;
-	__list_del_clearprev(&bq->flush_node);
-	return 0;
-error:
-	/* If ndo_xdp_xmit fails with an errno, no frames have been
-	 * xmit'ed and it's our responsibility to them free all.
+	/* If not all frames have been transmitted, it is our
+	 * responsibility to free them
 	 */
-	for (i = 0; i < bq->count; i++) {
-		struct xdp_frame *xdpf = bq->q[i];
+	for (i = sent; unlikely(i < bq->count); i++)
+		xdp_return_frame_rx_napi(bq->q[i]);
 
-		xdp_return_frame_rx_napi(xdpf);
-		drops++;
-	}
-	goto out;
+	trace_xdp_devmap_xmit(bq->dev_rx, dev, sent, bq->count - sent, err);
+	bq->dev_rx = NULL;
+	bq->count = 0;
+	__list_del_clearprev(&bq->flush_node);
 }
 
 /* __dev_flush is called from xdp_do_flush() which _must_ be signaled
@@ -413,7 +385,7 @@ void __dev_flush(void)
  * update happens in parallel here a dev_put wont happen until after reading the
  * ifindex.
  */
-struct bpf_dtab_netdev *__dev_map_lookup_elem(struct bpf_map *map, u32 key)
+static void *__dev_map_lookup_elem(struct bpf_map *map, u32 key)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
 	struct bpf_dtab_netdev *obj;
@@ -428,8 +400,8 @@ struct bpf_dtab_netdev *__dev_map_lookup_elem(struct bpf_map *map, u32 key)
 /* Runs under RCU-read-side, plus in softirq under NAPI protection.
  * Thus, safe percpu variable access.
  */
-static int bq_enqueue(struct net_device *dev, struct xdp_frame *xdpf,
-		      struct net_device *dev_rx)
+static void bq_enqueue(struct net_device *dev, struct xdp_frame *xdpf,
+		       struct net_device *dev_rx)
 {
 	struct list_head *flush_list = this_cpu_ptr(&dev_flush_list);
 	struct xdp_dev_bulk_queue *bq = this_cpu_ptr(dev->xdp_bulkq);
@@ -448,8 +420,6 @@ static int bq_enqueue(struct net_device *dev, struct xdp_frame *xdpf,
 
 	if (!bq->flush_node.prev)
 		list_add(&bq->flush_node, flush_list);
-
-	return 0;
 }
 
 static inline int __xdp_enqueue(struct net_device *dev, struct xdp_buff *xdp,
@@ -469,7 +439,8 @@ static inline int __xdp_enqueue(struct net_device *dev, struct xdp_buff *xdp,
 	if (unlikely(!xdpf))
 		return -EOVERFLOW;
 
-	return bq_enqueue(dev, xdpf, dev_rx);
+	bq_enqueue(dev, xdpf, dev_rx);
+	return 0;
 }
 
 static struct xdp_buff *dev_map_run_prog(struct net_device *dev,
@@ -479,6 +450,7 @@ static struct xdp_buff *dev_map_run_prog(struct net_device *dev,
 	struct xdp_txq_info txq = { .dev = dev };
 	u32 act;
 
+	xdp_set_data_meta_invalid(xdp);
 	xdp->txq = &txq;
 
 	act = bpf_prog_run_xdp(xdp_prog, xdp);
@@ -609,8 +581,9 @@ static struct bpf_dtab_netdev *__dev_map_alloc_node(struct net *net,
 	struct bpf_prog *prog = NULL;
 	struct bpf_dtab_netdev *dev;
 
-	dev = kmalloc_node(sizeof(*dev), GFP_ATOMIC | __GFP_NOWARN,
-			   dtab->map.numa_node);
+	dev = bpf_map_kmalloc_node(&dtab->map, sizeof(*dev),
+				   GFP_ATOMIC | __GFP_NOWARN,
+				   dtab->map.numa_node);
 	if (!dev)
 		return ERR_PTR(-ENOMEM);
 
@@ -618,7 +591,7 @@ static struct bpf_dtab_netdev *__dev_map_alloc_node(struct net *net,
 	if (!dev->dev)
 		goto err_out;
 
-	if (val->bpf_prog.fd >= 0) {
+	if (val->bpf_prog.fd > 0) {
 		prog = bpf_prog_get_type_dev(val->bpf_prog.fd,
 					     BPF_PROG_TYPE_XDP, false);
 		if (IS_ERR(prog))
@@ -652,8 +625,8 @@ static int __dev_map_update_elem(struct net *net, struct bpf_map *map,
 				 void *key, void *value, u64 map_flags)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
-	struct bpf_devmap_val val = { .bpf_prog.fd = -1 };
 	struct bpf_dtab_netdev *dev, *old_dev;
+	struct bpf_devmap_val val = {};
 	u32 i = *(u32 *)key;
 
 	if (unlikely(map_flags > BPF_EXIST))
@@ -669,7 +642,7 @@ static int __dev_map_update_elem(struct net *net, struct bpf_map *map,
 	if (!val.ifindex) {
 		dev = NULL;
 		/* can not specify fd if ifindex is 0 */
-		if (val.bpf_prog.fd != -1)
+		if (val.bpf_prog.fd > 0)
 			return -EINVAL;
 	} else {
 		dev = __dev_map_alloc_node(net, dtab, &val, i);
@@ -699,8 +672,8 @@ static int __dev_map_hash_update_elem(struct net *net, struct bpf_map *map,
 				     void *key, void *value, u64 map_flags)
 {
 	struct bpf_dtab *dtab = container_of(map, struct bpf_dtab, map);
-	struct bpf_devmap_val val = { .bpf_prog.fd = -1 };
 	struct bpf_dtab_netdev *dev, *old_dev;
+	struct bpf_devmap_val val = {};
 	u32 idx = *(u32 *)key;
 	unsigned long flags;
 	int err = -EEXIST;
@@ -755,7 +728,19 @@ static int dev_map_hash_update_elem(struct bpf_map *map, void *key, void *value,
 					 map, key, value, map_flags);
 }
 
+static int dev_map_redirect(struct bpf_map *map, u32 ifindex, u64 flags)
+{
+	return __bpf_xdp_redirect_map(map, ifindex, flags, __dev_map_lookup_elem);
+}
+
+static int dev_hash_map_redirect(struct bpf_map *map, u32 ifindex, u64 flags)
+{
+	return __bpf_xdp_redirect_map(map, ifindex, flags, __dev_map_hash_lookup_elem);
+}
+
+static int dev_map_btf_id;
 const struct bpf_map_ops dev_map_ops = {
+	.map_meta_equal = bpf_map_meta_equal,
 	.map_alloc = dev_map_alloc,
 	.map_free = dev_map_free,
 	.map_get_next_key = dev_map_get_next_key,
@@ -763,9 +748,14 @@ const struct bpf_map_ops dev_map_ops = {
 	.map_update_elem = dev_map_update_elem,
 	.map_delete_elem = dev_map_delete_elem,
 	.map_check_btf = map_check_no_btf,
+	.map_btf_name = "bpf_dtab",
+	.map_btf_id = &dev_map_btf_id,
+	.map_redirect = dev_map_redirect,
 };
 
+static int dev_map_hash_map_btf_id;
 const struct bpf_map_ops dev_map_hash_ops = {
+	.map_meta_equal = bpf_map_meta_equal,
 	.map_alloc = dev_map_alloc,
 	.map_free = dev_map_free,
 	.map_get_next_key = dev_map_hash_get_next_key,
@@ -773,6 +763,9 @@ const struct bpf_map_ops dev_map_hash_ops = {
 	.map_update_elem = dev_map_hash_update_elem,
 	.map_delete_elem = dev_map_hash_delete_elem,
 	.map_check_btf = map_check_no_btf,
+	.map_btf_name = "bpf_dtab",
+	.map_btf_id = &dev_map_hash_map_btf_id,
+	.map_redirect = dev_hash_map_redirect,
 };
 
 static void dev_map_hash_remove_netdev(struct bpf_dtab *dtab,
@@ -814,9 +807,7 @@ static int dev_map_notification(struct notifier_block *notifier,
 			break;
 
 		/* will be freed in free_netdev() */
-		netdev->xdp_bulkq =
-			__alloc_percpu_gfp(sizeof(struct xdp_dev_bulk_queue),
-					   sizeof(void *), GFP_ATOMIC);
+		netdev->xdp_bulkq = alloc_percpu(struct xdp_dev_bulk_queue);
 		if (!netdev->xdp_bulkq)
 			return NOTIFY_BAD;
 

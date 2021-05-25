@@ -41,7 +41,7 @@ endif
 
 export LD_BFD
 
-ifneq ($(SUBARCH),$(UTS_MACHINE))
+ifdef cross_compiling
 	ifeq ($(CROSS_COMPILE),)
 		CC_SUFFIXES = linux linux-gnu unknown-linux-gnu
 		CROSS_COMPILE := $(call cc-cross-prefix, \
@@ -116,8 +116,6 @@ kernel-y			:= mm/ kernel/ math-emu/
 core-y	+= $(addprefix arch/parisc/, $(kernel-y))
 libs-y	+= arch/parisc/lib/ $(LIBGCC)
 
-drivers-$(CONFIG_OPROFILE)		+= arch/parisc/oprofile/
-
 boot	:= arch/parisc/boot
 
 PALO := $(shell if (which palo 2>&1); then : ; \
@@ -162,7 +160,7 @@ vmlinuz: bzImage
 	$(OBJCOPY) $(boot)/bzImage $@
 else
 vmlinuz: vmlinux
-	@gzip -cf -9 $< > $@
+	@$(KGZIP) -cf -9 $< > $@
 endif
 
 install:

@@ -25,10 +25,9 @@ properties:
     description:
       u32 value of the base of parent HyperTransport vector allocated
       to PCH PIC.
-    allOf:
-      - $ref: "/schemas/types.yaml#/definitions/uint32"
-      - minimum: 0
-        maximum: 192
+    $ref: "/schemas/types.yaml#/definitions/uint32"
+    minimum: 0
+    maximum: 192
 
   interrupt-controller: true
 
@@ -41,6 +40,8 @@ required:
   - loongson,pic-base-vec
   - interrupt-controller
   - '#interrupt-cells'
+
+additionalProperties: false
 
 examples:
   - |

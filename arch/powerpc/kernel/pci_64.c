@@ -100,7 +100,7 @@ int pcibios_unmap_io_space(struct pci_bus *bus)
 			 pci_name(bus->self));
 
 #ifdef CONFIG_PPC_BOOK3S_64
-		__flush_hash_table_range(&init_mm, res->start + _IO_BASE,
+		__flush_hash_table_range(res->start + _IO_BASE,
 					 res->end + _IO_BASE + 1);
 #endif
 		return 0;
@@ -140,7 +140,7 @@ void __iomem *ioremap_phb(phys_addr_t paddr, unsigned long size)
 	addr = (unsigned long)area->addr;
 	if (ioremap_page_range(addr, addr + size, paddr,
 			pgprot_noncached(PAGE_KERNEL))) {
-		unmap_kernel_range(addr, size);
+		vunmap_range(addr, addr + size);
 		return NULL;
 	}
 
@@ -154,8 +154,8 @@ static int pcibios_map_phb_io_space(struct pci_controller *hose)
 	unsigned long size_page;
 	unsigned long io_virt_offset;
 
-	phys_page = _ALIGN_DOWN(hose->io_base_phys, PAGE_SIZE);
-	size_page = _ALIGN_UP(hose->pci_io_size, PAGE_SIZE);
+	phys_page = ALIGN_DOWN(hose->io_base_phys, PAGE_SIZE);
+	size_page = ALIGN(hose->pci_io_size, PAGE_SIZE);
 
 	/* Make sure IO area address is clear */
 	hose->io_base_alloc = NULL;

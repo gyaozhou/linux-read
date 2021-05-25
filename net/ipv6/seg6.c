@@ -25,7 +25,7 @@
 #include <net/seg6_hmac.h>
 #endif
 
-bool seg6_validate_srh(struct ipv6_sr_hdr *srh, int len)
+bool seg6_validate_srh(struct ipv6_sr_hdr *srh, int len, bool reduced)
 {
 	unsigned int tlv_offset;
 	int max_last_entry;
@@ -37,13 +37,17 @@ bool seg6_validate_srh(struct ipv6_sr_hdr *srh, int len)
 	if (((srh->hdrlen + 1) << 3) != len)
 		return false;
 
-	max_last_entry = (srh->hdrlen / 2) - 1;
-
-	if (srh->first_segment > max_last_entry)
+	if (!reduced && srh->segments_left > srh->first_segment) {
 		return false;
+	} else {
+		max_last_entry = (srh->hdrlen / 2) - 1;
 
-	if (srh->segments_left > srh->first_segment + 1)
-		return false;
+		if (srh->first_segment > max_last_entry)
+			return false;
+
+		if (srh->segments_left > srh->first_segment + 1)
+			return false;
+	}
 
 	tlv_offset = sizeof(*srh) + ((srh->first_segment + 1) << 4);
 
@@ -118,9 +122,6 @@ static int seg6_genl_sethmac(struct sk_buff *skb, struct genl_info *info)
 	hinfo = seg6_hmac_info_lookup(net, hmackeyid);
 
 	if (!slen) {
-		if (!hinfo)
-			err = -ENOENT;
-
 		err = seg6_hmac_info_del(net, hmackeyid);
 
 		goto out_unlock;

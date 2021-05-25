@@ -33,7 +33,7 @@ struct gk20a_fw_av
 	u32 data;
 };
 
-int
+static int
 gk20a_gr_av_to_init(struct gf100_gr *gr, const char *path, const char *name,
 		    int ver, struct gf100_gr_pack **ppack)
 {
@@ -83,7 +83,7 @@ struct gk20a_fw_aiv
 	u32 data;
 };
 
-int
+static int
 gk20a_gr_aiv_to_init(struct gf100_gr *gr, const char *path, const char *name,
 		     int ver, struct gf100_gr_pack **ppack)
 {
@@ -126,7 +126,7 @@ end:
 	return ret;
 }
 
-int
+static int
 gk20a_gr_av_to_method(struct gf100_gr *gr, const char *path, const char *name,
 		      int ver, struct gf100_gr_pack **ppack)
 {
@@ -352,12 +352,12 @@ gk20a_gr_load(struct gf100_gr *gr, int ver, const struct gf100_gr_fwif *fwif)
 
 static const struct gf100_gr_fwif
 gk20a_gr_fwif[] = {
-	{ -1, gk20a_gr_load, &gk20a_gr },
+	{ 0, gk20a_gr_load, &gk20a_gr },
 	{}
 };
 
 int
-gk20a_gr_new(struct nvkm_device *device, int index, struct nvkm_gr **pgr)
+gk20a_gr_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst, struct nvkm_gr **pgr)
 {
-	return gf100_gr_new_(gk20a_gr_fwif, device, index, pgr);
+	return gf100_gr_new_(gk20a_gr_fwif, device, type, inst, pgr);
 }

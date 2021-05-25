@@ -42,21 +42,21 @@ int test__syscall_openat_tp_fields(struct test *test __maybe_unused, int subtest
 	char sbuf[STRERR_BUFSIZE];
 
 	if (evlist == NULL) {
-		pr_debug("%s: perf_evlist__new\n", __func__);
+		pr_debug("%s: evlist__new\n", __func__);
 		goto out;
 	}
 
-	evsel = perf_evsel__newtp("syscalls", "sys_enter_openat");
+	evsel = evsel__newtp("syscalls", "sys_enter_openat");
 	if (IS_ERR(evsel)) {
-		pr_debug("%s: perf_evsel__newtp\n", __func__);
+		pr_debug("%s: evsel__newtp\n", __func__);
 		goto out_delete_evlist;
 	}
 
 	evlist__add(evlist, evsel);
 
-	err = perf_evlist__create_maps(evlist, &opts.target);
+	err = evlist__create_maps(evlist, &opts.target);
 	if (err < 0) {
-		pr_debug("%s: perf_evlist__create_maps\n", __func__);
+		pr_debug("%s: evlist__create_maps\n", __func__);
 		goto out_delete_evlist;
 	}
 

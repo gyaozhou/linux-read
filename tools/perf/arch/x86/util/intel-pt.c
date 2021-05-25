@@ -59,7 +59,8 @@ struct intel_pt_recording {
 	size_t				priv_size;
 };
 
-static int intel_pt_parse_terms_with_default(struct list_head *formats,
+static int intel_pt_parse_terms_with_default(const char *pmu_name,
+					     struct list_head *formats,
 					     const char *str,
 					     u64 *config)
 {
@@ -78,7 +79,8 @@ static int intel_pt_parse_terms_with_default(struct list_head *formats,
 		goto out_free;
 
 	attr.config = *config;
-	err = perf_pmu__config_terms(formats, &attr, terms, true, NULL);
+	err = perf_pmu__config_terms(pmu_name, formats, &attr, terms, true,
+				     NULL);
 	if (err)
 		goto out_free;
 
@@ -88,11 +90,12 @@ out_free:
 	return err;
 }
 
-static int intel_pt_parse_terms(struct list_head *formats, const char *str,
-				u64 *config)
+static int intel_pt_parse_terms(const char *pmu_name, struct list_head *formats,
+				const char *str, u64 *config)
 {
 	*config = 0;
-	return intel_pt_parse_terms_with_default(formats, str, config);
+	return intel_pt_parse_terms_with_default(pmu_name, formats, str,
+						 config);
 }
 
 static u64 intel_pt_masked_bits(u64 mask, u64 bits)
@@ -229,7 +232,8 @@ static u64 intel_pt_default_config(struct perf_pmu *intel_pt_pmu)
 
 	pr_debug2("%s default config: %s\n", intel_pt_pmu->name, buf);
 
-	intel_pt_parse_terms(&intel_pt_pmu->format, buf, &config);
+	intel_pt_parse_terms(intel_pt_pmu->name, &intel_pt_pmu->format, buf,
+			     &config);
 
 	return config;
 }
@@ -337,13 +341,16 @@ static int intel_pt_info_fill(struct auxtrace_record *itr,
 	if (priv_size != ptr->priv_size)
 		return -EINVAL;
 
-	intel_pt_parse_terms(&intel_pt_pmu->format, "tsc", &tsc_bit);
-	intel_pt_parse_terms(&intel_pt_pmu->format, "noretcomp",
-			     &noretcomp_bit);
-	intel_pt_parse_terms(&intel_pt_pmu->format, "mtc", &mtc_bit);
+	intel_pt_parse_terms(intel_pt_pmu->name, &intel_pt_pmu->format,
+			     "tsc", &tsc_bit);
+	intel_pt_parse_terms(intel_pt_pmu->name, &intel_pt_pmu->format,
+			     "noretcomp", &noretcomp_bit);
+	intel_pt_parse_terms(intel_pt_pmu->name, &intel_pt_pmu->format,
+			     "mtc", &mtc_bit);
 	mtc_freq_bits = perf_pmu__format_bits(&intel_pt_pmu->format,
 					      "mtc_period");
-	intel_pt_parse_terms(&intel_pt_pmu->format, "cyc", &cyc_bit);
+	intel_pt_parse_terms(intel_pt_pmu->name, &intel_pt_pmu->format,
+			     "cyc", &cyc_bit);
 
 	intel_pt_tsc_ctc_ratio(&tsc_ctc_ratio_n, &tsc_ctc_ratio_d);
 
@@ -409,7 +416,7 @@ static int intel_pt_track_switches(struct evlist *evlist)
 	struct evsel *evsel;
 	int err;
 
-	if (!perf_evlist__can_select_event(evlist, sched_switch))
+	if (!evlist__can_select_event(evlist, sched_switch))
 		return -EPERM;
 
 	err = parse_events(evlist, sched_switch, NULL);
@@ -556,10 +563,9 @@ static int intel_pt_validate_config(struct perf_pmu *intel_pt_pmu,
 static void intel_pt_config_sample_mode(struct perf_pmu *intel_pt_pmu,
 					struct evsel *evsel)
 {
-	struct perf_evsel_config_term *term;
 	u64 user_bits = 0, bits;
+	struct evsel_config_term *term = evsel__get_config_term(evsel, CFG_CHG);
 
-	term = perf_evsel__get_config_term(evsel, CFG_CHG);
 	if (term)
 		user_bits = term->val.cfg_chg;
 
@@ -635,6 +641,7 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 			}
 			evsel->core.attr.freq = 0;
 			evsel->core.attr.sample_period = 1;
+			evsel->no_aux_samples = true;
 			intel_pt_evsel = evsel;
 			opts->full_auxtrace = true;
 		}
@@ -769,7 +776,14 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 		}
 	}
 
-	intel_pt_parse_terms(&intel_pt_pmu->format, "tsc", &tsc_bit);
+	if (!opts->auxtrace_snapshot_mode && !opts->auxtrace_sample_mode) {
+		u32 aux_watermark = opts->auxtrace_mmap_pages * page_size / 4;
+
+		intel_pt_evsel->core.attr.aux_watermark = aux_watermark;
+	}
+
+	intel_pt_parse_terms(intel_pt_pmu->name, &intel_pt_pmu->format,
+			     "tsc", &tsc_bit);
 
 	if (opts->full_auxtrace && (intel_pt_evsel->core.attr.config & tsc_bit))
 		have_timing_info = true;
@@ -780,7 +794,8 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 	 * Per-cpu recording needs sched_switch events to distinguish different
 	 * threads.
 	 */
-	if (have_timing_info && !perf_cpu_map__empty(cpus)) {
+	if (have_timing_info && !perf_cpu_map__empty(cpus) &&
+	    !record_opts__no_switch_events(opts)) {
 		if (perf_can_record_switch_events()) {
 			bool cpu_wide = !target__none(&opts->target) &&
 					!target__has_task(&opts->target);
@@ -828,12 +843,16 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 		}
 	}
 
+	if (have_timing_info && !intel_pt_evsel->core.attr.exclude_kernel &&
+	    perf_can_record_text_poke_events() && perf_can_record_cpu_wide())
+		opts->text_poke = true;
+
 	if (intel_pt_evsel) {
 		/*
 		 * To obtain the auxtrace buffer file descriptor, the auxtrace
 		 * event must come first.
 		 */
-		perf_evlist__to_front(evlist, intel_pt_evsel);
+		evlist__to_front(evlist, intel_pt_evsel);
 		/*
 		 * In the case of per-cpu mmaps, we need the CPU on the
 		 * AUX event.
@@ -852,7 +871,7 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 
 		tracking_evsel = evlist__last(evlist);
 
-		perf_evlist__set_tracking_event(evlist, tracking_evsel);
+		evlist__set_tracking_event(evlist, tracking_evsel);
 
 		tracking_evsel->core.attr.freq = 0;
 		tracking_evsel->core.attr.sample_period = 1;
@@ -875,7 +894,8 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,
 	 * per-cpu with no sched_switch (except workload-only).
 	 */
 	if (!ptr->have_sched_switch && !perf_cpu_map__empty(cpus) &&
-	    !target__none(&opts->target))
+	    !target__none(&opts->target) &&
+	    !intel_pt_evsel->core.attr.exclude_user)
 		ui__warning("Intel Processor Trace decoding will not be possible except for kernel tracing!\n");
 
 	return 0;
